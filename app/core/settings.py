@@ -24,6 +24,21 @@ class Settings(BaseSettings):
 
     proxy_url: str | None = None
 
+    # Письма менеджеру: Yandex Cloud Postbox (ключ сервисного аккаунта с ролью postbox.sender)
+    postbox_access_key_id: str = ""
+    postbox_secret_key: SecretStr = SecretStr("")
+    postbox_from: str = ""
+    # Адресаты через запятую; пусто — письма не отправляются
+    notify_to: str = ""
+
+    @property
+    def recipients(self) -> list[str]:
+        return [a.strip() for a in self.notify_to.split(",") if "@" in a]
+
+    @property
+    def public_url(self) -> str:
+        return f"https://{self.domain}"
+
     jury_login: str = "jury"
     # Пустой пароль = вход закрыт, а не открыт.
     jury_password: SecretStr = SecretStr("")

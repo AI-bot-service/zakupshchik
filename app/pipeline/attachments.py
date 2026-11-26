@@ -150,9 +150,10 @@ def file_path(root: Path, platform: str, external_id: str, n: int, name: str) ->
     return deal_dir(root, platform, external_id) / f"{n:02d}_{_safe(name)}"
 
 
-def get_attachment_text(
+def download_file(
     session: Session, fetcher: Fetcher, cfg: PlatformConfig, deal: Deal, file_id: str, root: Path = FILES_DIR
-) -> AttachmentText:
+) -> DealFile:
+    """Файл закупки как есть (любой формат) в папку закупки + запись deal_file; повторно — из кэша."""
     n, meta = _file_meta(deal, file_id)
     spec = cfg.details
     if spec is None or spec.file_url is None:
@@ -161,35 +162,50 @@ def get_attachment_text(
     if not isinstance(url, str):
         raise AttachmentError("не из чего собрать адрес файла")
     cached = session.scalar(select(DealFile).where(DealFile.deal_id == deal.id, DealFile.source_url == url))
-    if cached is not None and Path(cached.path + ".txt").exists():
-        text = Path(cached.path + ".txt").read_text(encoding="utf-8")
-        return AttachmentText(file_id, meta["name"], text[:MAX_TEXT_CHARS], len(text) > MAX_TEXT_CHARS, True)
+    if cached is not None and Path(cached.path).exists():
+        return cached
     try:
         data = fetcher.get_bytes(cfg, url, MAX_FILE_BYTES)
     except FileTooLargeError as exc:
         raise AttachmentError(str(exc)) from exc
     except httpx.HTTPError as exc:
         raise AttachmentError(f"площадка не отдала файл ({type(exc).__name__})") from exc
-    text = extract_text(meta["name"], data)
     sha = hashlib.sha256(data).hexdigest()
     ext = Path(meta["name"]).suffix.lower()
     path = file_path(root, cfg.code, deal.external_id, n, meta["name"])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
-    Path(str(path) + ".txt").write_text(text, encoding="utf-8")
-    same = cached or session.scalar(
+    row = cached or session.scalar(
         select(DealFile).where(DealFile.deal_id == deal.id, DealFile.sha256 == sha)
     )
-    if same is None:
-        session.add(
-            DealFile(
-                deal_id=deal.id,
-                name=meta["name"],
-                mime=_MIME.get(ext, "application/octet-stream"),
-                size=len(data),
-                sha256=sha,
-                source_url=url,
-                path=str(path),
-            )
+    if row is None:
+        row = DealFile(
+            deal_id=deal.id,
+            name=meta["name"],
+            mime=_MIME.get(ext, "application/octet-stream"),
+            size=len(data),
+            sha256=sha,
+            source_url=url,
+            path=str(path),
         )
-    return AttachmentText(file_id, meta["name"], text[:MAX_TEXT_CHARS], len(text) > MAX_TEXT_CHARS, False)
+        session.add(row)
+    else:
+        row.path = str(path)
+    session.flush()
+    return row
+
+
+def get_attachment_text(
+    session: Session, fetcher: Fetcher, cfg: PlatformConfig, deal: Deal, file_id: str, root: Path = FILES_DIR
+) -> AttachmentText:
+    """Текст файла для агента (без ПДн); файл скачивается один раз, текст кэшируется рядом (.txt)."""
+    _, meta = _file_meta(deal, file_id)
+    row = download_file(session, fetcher, cfg, deal, file_id, root)
+    txt = Path(row.path + ".txt")
+    cached = txt.exists()
+    if cached:
+        text = txt.read_text(encoding="utf-8")
+    else:
+        text = extract_text(meta["name"], Path(row.path).read_bytes())
+        txt.write_text(text, encoding="utf-8")
+    return AttachmentText(file_id, meta["name"], text[:MAX_TEXT_CHARS], len(text) > MAX_TEXT_CHARS, cached)

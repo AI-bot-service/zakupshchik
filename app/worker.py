@@ -12,7 +12,7 @@ import structlog
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.adapters.config import load_platforms
+from app.adapters.config import PlatformConfig, load_platforms
 from app.adapters.fetch import Fetcher
 from app.agent.llm import GatewayLLM
 from app.catalog.importer import DEFAULT_PATH as CATALOG_FILE
@@ -22,9 +22,11 @@ from app.collector import PLATFORMS_FILE, VENDORS_FILE, run_cycle
 from app.core.logging import configure_logging
 from app.core.settings import Settings
 from app.db.session import make_engine, make_session_factory
+from app.notify.postbox import MailError, PostboxMailer
 from app.pipeline.analysis import Models, rescore, run_analysis
+from app.pipeline.notify import NotifyRun, daily_report, notify_deals
 from app.pipeline.proposals import make_proposals
-from app.scoring.rules import RulesError, load_rules
+from app.scoring.rules import Rules, RulesError, load_rules
 
 log = structlog.get_logger("worker")
 # Сделок на разбор за запуск: ~1 мин на сделку, запуск раз в интервал сбора
@@ -48,6 +50,38 @@ def cycle(factory: sessionmaker[Session], proxy_url: str | None) -> None:
         log.exception("cycle_failed", error=type(exc).__name__)
 
 
+def notify(
+    factory: sessionmaker[Session],
+    settings: Settings,
+    rules: Rules,
+    platforms: list[PlatformConfig],
+    now: datetime,
+) -> NotifyRun:
+    """Письма по горячим сделкам и ежедневный Excel. Нет Postbox или адресатов — пропускаем."""
+    if not settings.recipients:
+        return NotifyRun()
+    try:
+        mailer = PostboxMailer(
+            settings.postbox_access_key_id,
+            settings.postbox_secret_key.get_secret_value(),
+            settings.postbox_from,
+        )
+    except MailError as exc:
+        log.warning("notify_skipped", reason=str(exc))
+        return NotifyRun()
+    by_code = {c.code: c for c in platforms}
+    with Fetcher(settings.proxy_url) as fetcher, factory.begin() as session:
+        run = notify_deals(
+            session, mailer, settings.recipients, rules, now, settings.public_url, fetcher, by_code
+        )
+    with factory.begin() as session:
+        daily = daily_report(session, mailer, settings.recipients, rules, now, settings.public_url)
+    run.daily, run.failed = daily.daily, run.failed + daily.failed
+    for err in run.errors + daily.errors:
+        log.warning("notify_failed", error=err)
+    return run
+
+
 def analyze(factory: sessionmaker[Session], settings: Settings) -> None:
     try:
         rules = load_rules()
@@ -66,6 +100,7 @@ def analyze(factory: sessionmaker[Session], settings: Settings) -> None:
             run = run_analysis(factory, fetcher, platforms, vendors, rules, llm, models, now, ANALYZE_PER_RUN)
         with factory.begin() as session:
             kp = make_proposals(session, rules, now)
+        sent = notify(factory, settings, rules, platforms, now)
         log.info(
             "analyze_done",
             analyzed=run.analyzed,
@@ -75,6 +110,10 @@ def analyze(factory: sessionmaker[Session], settings: Settings) -> None:
             cost_rub=str(run.cost_rub),
             errors=len(run.errors),
             kp_made=kp.made,
+            kp_pdf=kp.pdf,
+            letters=sent.deal_letters,
+            daily=sent.daily,
+            mail_failed=sent.failed,
             kp_not_eligible=kp.not_eligible,
             **stats,
         )

@@ -97,3 +97,5 @@ kp:
 notify:
   daily_report_at: "09:00"
   urgent_hours_left: 24
+  # Письмо по сделке — от «N из 5» и выше; адресаты — NOTIFY_TO в .env (не в репозитории)
+  min_conditions: 4

@@ -56,6 +56,7 @@ class Weights(_Strict):
 class Notify(_Strict):
     daily_report_at: time
     urgent_hours_left: float = Field(gt=0)
+    min_conditions: int = Field(ge=1, le=5)
 
 
 class Kp(_Strict):
