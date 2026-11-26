@@ -73,14 +73,20 @@ class Fetcher:
                 self._sleep(gap)
         self._last[cfg.code] = self._clock()
 
+    def get(self, cfg: PlatformConfig, query: str) -> str:
+        """Страница поиска площадки по слову."""
+        return self.get_url(cfg, cfg.url, build_params(cfg, query))
+
     @retry(
         retry=retry_if_exception(_retryable),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=3, max=20),
         reraise=True,
     )
-    def get(self, cfg: PlatformConfig, query: str) -> str:
+    def get_url(self, cfg: PlatformConfig, url: str, params: dict[str, str | list[str]] | None = None) -> str:
+        if not url.startswith("https://"):
+            raise ValueError("площадки опрашиваем только по https")
         self._wait_turn(cfg)
-        resp = self._client.get(cfg.url, params=build_params(cfg, query))
+        resp = self._client.get(url, params=params)
         resp.raise_for_status()
         return resp.text

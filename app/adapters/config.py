@@ -42,6 +42,30 @@ class DealFields(BaseModel):
     smb_flag: FieldSpec | None = None
 
 
+class ItemFields(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    name: FieldSpec
+    qty: FieldSpec | None = None
+    unit: FieldSpec | None = None
+    unit_price: FieldSpec | None = None
+    okpd: FieldSpec | None = None
+
+
+class DetailsConfig(BaseModel):
+    """Карточка закупки: позиции и условия. Контакты заказчика не берём — только поля из keep."""
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    # Шаблоны от полей сделки: {external_id} и поля из keep_raw площадки
+    url: FieldSpec
+    items_path: str
+    item_fields: ItemFields
+    # Текстовые поля карточки (белый список) → raw_masked.details после маскирования ПДн
+    keep: dict[str, FieldSpec] = Field(default_factory=dict)
+    files_path: str | None = None
+
+
 class PlatformConfig(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
@@ -65,6 +89,7 @@ class PlatformConfig(BaseModel):
     law_default: Law = Law.UNKNOWN
     # Белый список полей записи, которые сохраняются как есть (после маскирования ПДн)
     keep_raw: list[str] = Field(default_factory=list)
+    details: DetailsConfig | None = None
 
 
 class PlatformsFile(BaseModel):

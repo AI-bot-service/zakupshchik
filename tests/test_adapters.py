@@ -8,6 +8,7 @@ import pytest
 
 from app.adapters import parse
 from app.adapters.config import PlatformConfig, load_platforms
+from app.adapters.details import details_url, parse_details
 from app.adapters.extract import ExtractError
 from app.adapters.fetch import Fetcher, build_params
 from app.adapters.normalize import MSK, parse_dt, parse_money, resolve
@@ -129,3 +130,32 @@ def test_fetcher_waits_between_requests_to_one_platform() -> None:
 def test_platform_codes_unique_and_https() -> None:
     assert len(CONFIGS) >= 3
     assert all(c.url.startswith("https://") for c in CONFIGS.values())
+
+
+def test_mos_portal_details_need_and_auction() -> None:
+    spec = CONFIGS["mos_portal"].details
+    assert spec is not None
+    need = parse_details(fixture("mos_portal_need.json"), spec)
+    assert len(need.items) == 2
+    assert need.items[0].okpd and need.items[0].unit_price == Decimal("11747.13")
+    assert need.extra["conclusion_reason"].startswith("п. 5 ч. 1 ст. 93")
+    assert "payment_terms" not in need.extra  # «-» на площадке = не указано
+    assert need.files and "Проект контракта" in need.files[0]
+    auction = parse_details(fixture("mos_portal_auction.json"), spec)
+    assert len(auction.items) == 2 and auction.items[0].unit == "усл. ед"
+    assert auction.extra["okpd_name"] == "Обеспечение программное сетевое на электронном носителе"
+
+
+def test_details_never_copy_contacts() -> None:
+    spec = CONFIGS["mos_portal"].details
+    assert spec is not None
+    text = str(parse_details(fixture("mos_portal_need.json"), spec).model_dump())
+    assert "Иванова" not in text and "123-45-67" not in text
+
+
+def test_details_url_from_deal_fields() -> None:
+    spec = CONFIGS["mos_portal"].details
+    assert spec is not None
+    assert details_url(spec, {"needId": 6322826}) == "https://zakupki.mos.ru/newapi/api/Need/Get?needId=6322826"
+    assert details_url(spec, {"auctionId": 10355601}).endswith("auctionId=10355601")  # type: ignore[union-attr]
+    assert details_url(spec, {}) is None

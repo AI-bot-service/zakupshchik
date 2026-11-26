@@ -1,0 +1,49 @@
+# Вендоры каталога store.softline.ru и как их называют в закупках. Ключ — vendor_slug из каталога.
+# Слова сравниваются без учёта регистра как начало слова: «касперск» найдёт «Касперского», «Kaspersky» — «Kaspersky».
+# Продукты — характерные названия, по которым закупку узнают без имени вендора.
+
+vendors:
+  kaspersky:
+    name: Лаборатория Касперского
+    words: [kaspersky, касперск, "kes "]
+    products: [Kaspersky Endpoint Security, KSC, Kaspersky Security Center, KATA, KUMA, KSMG]
+  drweb:
+    name: Доктор Веб
+    words: [dr.web, drweb, "доктор веб", "доктор web"]
+    products: [Dr.Web Enterprise Security Suite, Dr.Web Desktop Security Suite]
+  pro32:
+    name: PRO32
+    words: [pro32]
+    products: [PRO32 Endpoint Security]
+  astralinux:
+    name: Группа Астра
+    words: ["astra linux", "астра линукс", "гк астра", "группа астра", "рупост", "brest", "termidesk", "dcimanager", "billmanager", "vmmanager", "алд про", "ald pro"]
+    products: [Astra Linux Special Edition, Astra Linux Common Edition, ALD Pro, RuPost, Termidesk]
+  kripto-pro:
+    name: КриптоПро
+    words: [криптопро, cryptopro, "крипто про"]
+    products: [КриптоПро CSP, КриптоПро TLS, КриптоПро NGate, КриптоПро УЦ]
+  cyberprotect:
+    name: Киберпротект
+    words: [киберпротект, "кибер бэкап", "кибер протект", "кибер инфраструктура", "кибер файлы", cyberprotect, "cyber backup", acronis, акронис]
+    products: [Кибер Бэкап, Кибер Инфраструктура, Кибер Файлы]
+  redsoft:
+    name: РЕД СОФТ
+    words: ["ред ос", "red os", "ред софт", "red soft", "ред база данных", "ред бд"]
+    products: [РЕД ОС, РЕД База Данных]
+  yandex:
+    name: Яндекс
+    words: ["яндекс 360", "яндекс.трекер", "яндекс трекер", "яндекс.диск", "yandex 360"]
+    products: [Яндекс 360 для бизнеса, Яндекс Трекер]
+  positive-technologies:
+    name: Positive Technologies
+    words: ["positive technologies", "позитив текнолоджиз", maxpatrol, xspider, "pt application firewall", "pt network attack", "pt sandbox", "pt nad", "pt af"]
+    products: [MaxPatrol SIEM, MaxPatrol VM, XSpider, PT Application Firewall, PT NAD]
+  basealt:
+    name: Базальт СПО
+    words: [basealt, "базальт", "альт линукс", "alt linux", "альт рабочая станция", "альт сервер", "альт образование", "альт домен"]
+    products: [Альт Рабочая станция, Альт Сервер, Альт Образование]
+  contentai:
+    name: Content AI
+    words: ["content ai", "контент ии", abbyy, finereader, lingvo, "аби "]
+    products: [ABBYY FineReader PDF, Lingvo]

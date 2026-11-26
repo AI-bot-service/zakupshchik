@@ -46,7 +46,29 @@ platforms:
       "2": single_supplier     # закупка по потребности у единственного поставщика
       "3": tender
     law_map: { "44-ФЗ": "44", "44-ФЗ (46-ФЗ)": "44", "223-ФЗ": "223" }
-    keep_raw: [tradeType, number, stateName, federalLawName, isB2B, offerCount, regionPath]
+    keep_raw: [needId, auctionId, tradeType, number, stateName, federalLawName, isB2B, offerCount, regionPath]
+    details:
+      url:
+        - "https://zakupki.mos.ru/newapi/api/Need/Get?needId={needId}"
+        - "https://zakupki.mos.ru/newapi/api/Auction/Get?auctionId={auctionId}"
+      items_path: items
+      item_fields:
+        name: name
+        qty: [quantity, currentValue]
+        unit: okeiName
+        unit_price: costPerUnit
+        okpd: okpd.code
+      keep:
+        description: description
+        okpd_name: [items.0.okpd.name, items.0.okpdName]
+        conclusion_reason: conclusionReasonName
+        payment_terms: paymentTerms
+        delivery_place: [deliveryPlace, deliveries.0.deliveryPlace]
+        delivery_days_to: [deliveryDaysTo, deliveries.0.periodDaysTo]
+        contract_guarantee_required: isContractGuaranteeRequired
+        national_regime: nationalRegimeRestrictions
+        participant_requirements: additionalParticipantRequirements
+      files_path: files
 
   - code: tektorg_market
     name: ТЭК-Торг — Интернет-магазин (закупки малого объёма)

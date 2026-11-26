@@ -9,6 +9,7 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
@@ -17,11 +18,19 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.adapters import collect
 from app.adapters.config import PlatformConfig, load_platforms
 from app.adapters.fetch import Fetcher
+from app.catalog.vendors import VendorIndex, load_vendors
 from app.db.models import AgentStep
+from app.pipeline.details import load_details
 from app.pipeline.ingest import mark_platform, save_deals, sync_platforms
+from app.pipeline.prefilter import run_prefilter
+from app.scoring.rules import Rules, load_rules
 
-PLATFORMS_FILE = Path(__file__).resolve().parent.parent / "config" / "platforms.yaml"
+CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
+PLATFORMS_FILE = CONFIG_DIR / "platforms.yaml"
+VENDORS_FILE = CONFIG_DIR / "vendors.yaml"
 log = structlog.get_logger("collector")
+# Карточек за цикл: при 3 с на запрос — до 2 минут
+DETAILS_PER_CYCLE = 40
 
 
 @dataclass(frozen=True)
@@ -31,6 +40,7 @@ class PlatformRun:
     new: int
     updated: int
     skipped: int
+    closed: int
     errors: list[str]
     ms: int
 
@@ -39,8 +49,10 @@ def run_cycle(
     session_factory: sessionmaker[Session],
     fetcher: Fetcher,
     configs: list[PlatformConfig],
+    rules: Rules,
+    vendors: VendorIndex,
     only: set[str] | None = None,
-) -> list[PlatformRun]:
+) -> tuple[list[PlatformRun], dict[str, int]]:
     run_id = str(uuid.uuid4())
     with session_factory.begin() as session:
         ids = sync_platforms(session, configs)
@@ -60,6 +72,7 @@ def run_cycle(
                 new=saved.new,
                 updated=saved.updated,
                 skipped=result.skipped,
+                closed=result.closed,
                 errors=result.errors,
                 ms=int((time.monotonic() - started) * 1000),
             )
@@ -68,7 +81,8 @@ def run_cycle(
                     run_id=run_id,
                     step="collect",
                     output={"platform": cfg.code, "found": run.found, "new": run.new,
-                            "updated": run.updated, "skipped": run.skipped, "errors": run.errors},
+                            "updated": run.updated, "skipped": run.skipped, "closed": run.closed,
+                            "errors": run.errors},
                     ms=run.ms,
                     error=None if result.ok else {"code": "platform_unavailable", "message_ru": error},
                 )
@@ -76,7 +90,41 @@ def run_cycle(
         log.info("collect", run_id=run_id, **{k: v for k, v in run.__dict__.items() if k != "errors"},
                  errors=len(run.errors))
         runs.append(run)
-    return runs
+    stats = _prefilter_step(session_factory, run_id, rules, vendors)
+    started = time.monotonic()
+    with session_factory.begin() as session:
+        details = load_details(session, fetcher, configs, DETAILS_PER_CYCLE)
+        session.add(
+            AgentStep(
+                run_id=run_id,
+                step="details",
+                output={"loaded": details.loaded, "errors": details.errors},
+                ms=int((time.monotonic() - started) * 1000),
+            )
+        )
+    log.info("details", run_id=run_id, loaded=details.loaded, errors=len(details.errors))
+    if details.loaded:
+        second = _prefilter_step(session_factory, run_id, rules, vendors)
+        stats = {k: stats[k] - (details.loaded if k == "passed" else 0) + second[k] for k in stats}
+    return runs, stats
+
+
+def _prefilter_step(
+    session_factory: sessionmaker[Session], run_id: str, rules: Rules, vendors: VendorIndex
+) -> dict[str, int]:
+    started = time.monotonic()
+    with session_factory.begin() as session:
+        stats = run_prefilter(session, rules, vendors, datetime.now(UTC))
+        session.add(
+            AgentStep(
+                run_id=run_id,
+                step="prefilter",
+                output={"rules_version": rules.version, **stats},
+                ms=int((time.monotonic() - started) * 1000),
+            )
+        )
+    log.info("prefilter", run_id=run_id, rules_version=rules.version, **stats)
+    return stats
 
 
 def main(argv: list[str]) -> int:
@@ -87,13 +135,17 @@ def main(argv: list[str]) -> int:
     settings = Settings()  # значения из окружения
     configure_logging(settings.debug)
     factory = make_session_factory(make_engine(settings.database_url.encoded_string()))
+    rules, vendors = load_rules(), load_vendors(VENDORS_FILE)
     with Fetcher(settings.proxy_url) as fetcher:
-        runs = run_cycle(factory, fetcher, load_platforms(PLATFORMS_FILE), set(argv) or None)
+        platforms = load_platforms(PLATFORMS_FILE)
+        runs, stats = run_cycle(factory, fetcher, platforms, rules, vendors, set(argv) or None)
     for r in runs:
         print(f"{r.code}: найдено {r.found}, новых {r.new}, обновлено {r.updated}, "
-              f"не разобрано {r.skipped}, ошибок {len(r.errors)}")
+              f"закрытых {r.closed}, не разобрано {r.skipped}, ошибок {len(r.errors)}")
         for e in r.errors:
             print(f"  ! {e}")
+    print(f"префильтр (правила {rules.version}): прошли {stats['passed']}, "
+          f"отсеяно {stats['filtered_out']}, истекли {stats['expired']}")
     return 0 if all(r.found or not r.errors for r in runs) else 1
 
 

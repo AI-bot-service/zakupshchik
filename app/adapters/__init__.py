@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 import httpx
 
@@ -18,6 +19,8 @@ class CollectResult:
     # Ошибки — по запросу: «что случилось», без тел ответов (там могут быть ПДн)
     errors: list[str] = field(default_factory=list)
     skipped: int = 0
+    # Поиск площадок отдаёт и давно закрытые закупки — их не сохраняем
+    closed: int = 0
 
     @property
     def ok(self) -> bool:
@@ -34,8 +37,9 @@ def parse(text: str, cfg: PlatformConfig) -> CollectResult:
     return result
 
 
-def collect(cfg: PlatformConfig, fetcher: Fetcher) -> CollectResult:
-    """Все запросы площадки; сделки уникальны по external_id внутри прогона."""
+def collect(cfg: PlatformConfig, fetcher: Fetcher, now: datetime | None = None) -> CollectResult:
+    """Все запросы площадки; сделки уникальны по external_id внутри прогона, закрытые отброшены."""
+    now = now or datetime.now(UTC)
     total = CollectResult()
     seen: set[str] = set()
     for query in cfg.queries:
@@ -52,7 +56,9 @@ def collect(cfg: PlatformConfig, fetcher: Fetcher) -> CollectResult:
             continue
         total.skipped += part.skipped
         for deal in part.deals:
-            if deal.external_id not in seen:
+            if deal.end_at is not None and deal.end_at <= now:
+                total.closed += 1
+            elif deal.external_id not in seen:
                 seen.add(deal.external_id)
                 total.deals.append(deal)
     return total

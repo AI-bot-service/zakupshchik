@@ -1,0 +1,113 @@
+{
+ "region": {
+  "treePathId": ".1.13486.",
+  "socr": "",
+  "id": 13486,
+  "oktmo": "70000000",
+  "code": "7100000000000",
+  "name": " Тульская область"
+ },
+ "deliveryRegion": null,
+ "customer": {
+  "name": "МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ДОПОЛНИТЕЛЬНОГО ОБРАЗОВАНИЯ \"ЦЕНТР ВНЕШКОЛЬНОЙ РАБОТЫ\"",
+  "id": 14782684
+ },
+ "createdByCustomer": {
+  "name": "МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ДОПОЛНИТЕЛЬНОГО ОБРАЗОВАНИЯ \"ЦЕНТР ВНЕШКОЛЬНОЙ РАБОТЫ\"",
+  "id": 14782684
+ },
+ "state": {
+  "name": "Прием предложений",
+  "id": 20000002
+ },
+ "proposalStartDate": "26.11.2026 15:45:37",
+ "proposalEndDate": "01.12.2026 18:00:00",
+ "nmck": 15330.0,
+ "federalLawName": "44-ФЗ",
+ "conclusionReasonName": "п. 5 ч. 1 ст. 93 Закупка объёмом до 600 тысяч рублей",
+ "isZmo": false,
+ "contactPerson": "Контактное лицо: Иванова Мария Петровна, +7 (495) 123-45-67",
+ "contactPhone": "[удалено из фикстуры]",
+ "contactEmail": null,
+ "planContractDate": "30.11.2026 18:00:00",
+ "deliveryPlace": "Россия, д. 41",
+ "deliveryDaysFrom": null,
+ "deliveryDaysTo": null,
+ "deliveryDateFrom": null,
+ "deliveryDateTo": null,
+ "paymentTerms": "-",
+ "description": "оказание услуг на право использования программы для ЭВМ «Контур.Экстерн» и оказание услуг по сопровождению (технической поддержке)",
+ "currentSupplierProposal": null,
+ "winnerProposal": null,
+ "enableToViewWinnerSupplier": false,
+ "items": [
+  {
+   "needId": 6322826,
+   "order": 1,
+   "quantity": 1.0,
+   "costPerUnit": 11747.13,
+   "totalCost": 11747.13,
+   "okeiName": "шт",
+   "skuId": null,
+   "okpd": {
+    "code": "58.29.50.000",
+    "name": "Услуги по предоставлению лицензий на право использовать компьютерное программное обеспечение",
+    "id": 1132953
+   },
+   "ktru": null,
+   "productionDirectory": null,
+   "skuImageId": null,
+   "name": "Услуги по предоставлению лицензий на право использовать компьютерное программное обеспечение",
+   "id": 19905545
+  },
+  {
+   "needId": 6322826,
+   "order": 2,
+   "quantity": 1.0,
+   "costPerUnit": 3582.87,
+   "totalCost": 3582.87,
+   "okeiName": "шт",
+   "skuId": null,
+   "okpd": {
+    "code": "58.29.50.000",
+    "name": "Услуги по предоставлению лицензий на право использовать компьютерное программное обеспечение",
+    "id": 1132953
+   },
+   "ktru": null,
+   "productionDirectory": null,
+   "skuImageId": null,
+   "name": "Услуги по предоставлению лицензий на право использовать компьютерное программное обеспечение",
+   "id": 19905546
+  }
+ ],
+ "files": [
+  {
+   "name": "Проект контракта ЦВР1.doc",
+   "id": 288445891
+  },
+  {
+   "name": "Обоснование НМЦ.docx",
+   "id": 288445892
+  },
+  {
+   "name": "ООЗ.doc",
+   "id": 288445893
+  }
+ ],
+ "purchaseTypeId": 1,
+ "externalId": "krista.71222100.26391206217",
+ "externalSystemId": 60,
+ "rowVersion": "AAAAA1Zm3Jw=",
+ "externalUrl": null,
+ "repeatPeriod": null,
+ "isPtkr": false,
+ "securityStatus": null,
+ "lot": [],
+ "externalNumber": null,
+ "additionalParticipantRequirements": null,
+ "additionalApplicationRequirements": null,
+ "nationalRegimeRestrictions": null,
+ "contractCost": null,
+ "name": "оказание услуг на право использования программы для ЭВМ «Контур.Экстерн» и оказание услуг по сопровождению (технической поддержке)",
+ "id": 6322826
+}

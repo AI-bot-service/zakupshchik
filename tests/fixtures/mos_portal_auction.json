@@ -1,0 +1,190 @@
+{
+ "customer": {
+  "inn": "5321166367",
+  "name": "ИНСПЕКЦИЯ ГОСУДАРСТВЕННОЙ ОХРАНЫ КУЛЬТУРНОГО НАСЛЕДИЯ НОВГОРОДСКОЙ ОБЛАСТИ",
+  "id": 1184160
+ },
+ "createdByCustomer": {
+  "name": "ИНСПЕКЦИЯ ГОСУДАРСТВЕННОЙ ОХРАНЫ КУЛЬТУРНОГО НАСЛЕДИЯ НОВГОРОДСКОЙ ОБЛАСТИ",
+  "id": 1184160
+ },
+ "state": {
+  "name": "Активная",
+  "id": 19000002
+ },
+ "startDate": "26.11.2026 15:45:28",
+ "initialDuration": 24.0,
+ "endDate": "27.11.2026 15:45:28",
+ "startCost": 24723.13,
+ "nextCost": null,
+ "lastBetSupplier": null,
+ "enableToViewLastBetSupplier": false,
+ "lastBetCost": null,
+ "lastBetId": null,
+ "step": 123.61565,
+ "auctionItem": [
+  {
+   "currentValue": 1.0,
+   "costPerUnit": 23623.13,
+   "okeiName": "усл. ед",
+   "createdOfferId": null,
+   "skuId": null,
+   "imageId": null,
+   "defaultImageId": null,
+   "okpdName": "Обеспечение программное сетевое на электронном носителе",
+   "productionDirectoryName": "ОКПД 2",
+   "oksm": {
+    "name": "РОССИЯ",
+    "id": 251
+   },
+   "name": "Поставка неисключительных (пользовательских) прав на использование программного обеспечения Dr.Web Desktop Security Suite  (продление лицензии)",
+   "id": 24131218
+  },
+  {
+   "currentValue": 1.0,
+   "costPerUnit": 1100.0,
+   "okeiName": "шт",
+   "createdOfferId": null,
+   "skuId": null,
+   "imageId": null,
+   "defaultImageId": null,
+   "okpdName": "Обеспечение программное сетевое на электронном носителе",
+   "productionDirectoryName": "ОКПД 2",
+   "oksm": {
+    "name": "РОССИЯ",
+    "id": 251
+   },
+   "name": "Расширение лицензии на Dr.Web Enterprise Security Suite сертифицированный ФСТЭК России (сертификат  № 3509)  CERT-FST",
+   "id": 24131219
+  }
+ ],
+ "bets": [],
+ "offerSignTime": null,
+ "uniqueSupplierCount": 0,
+ "auctionRegion": [
+  {
+   "treePathId": ".1.72071.",
+   "socr": "",
+   "id": 72071,
+   "oktmo": "49000000",
+   "code": "5300000000000",
+   "name": " Новгородская область"
+  }
+ ],
+ "repeatId": null,
+ "unpublishName": null,
+ "unpublishDate": null,
+ "federalLawName": "223-ФЗ",
+ "conclusionReasonName": null,
+ "isZmo": false,
+ "items": [
+  {
+   "currentValue": 1.0,
+   "costPerUnit": 23623.13,
+   "okeiName": "усл. ед",
+   "createdOfferId": null,
+   "skuId": null,
+   "imageId": null,
+   "defaultImageId": null,
+   "okpdName": "Обеспечение программное сетевое на электронном носителе",
+   "productionDirectoryName": "ОКПД 2",
+   "oksm": {
+    "name": "РОССИЯ",
+    "id": 251
+   },
+   "name": "Поставка неисключительных (пользовательских) прав на использование программного обеспечения Dr.Web Desktop Security Suite  (продление лицензии)",
+   "id": 24131218
+  },
+  {
+   "currentValue": 1.0,
+   "costPerUnit": 1100.0,
+   "okeiName": "шт",
+   "createdOfferId": null,
+   "skuId": null,
+   "imageId": null,
+   "defaultImageId": null,
+   "okpdName": "Обеспечение программное сетевое на электронном носителе",
+   "productionDirectoryName": "ОКПД 2",
+   "oksm": {
+    "name": "РОССИЯ",
+    "id": 251
+   },
+   "name": "Расширение лицензии на Dr.Web Enterprise Security Suite сертифицированный ФСТЭК России (сертификат  № 3509)  CERT-FST",
+   "id": 24131219
+  }
+ ],
+ "deliveries": [
+  {
+   "periodDaysFrom": 1,
+   "periodDaysTo": 10,
+   "periodDateFrom": null,
+   "periodDateTo": null,
+   "deliveryPlace": "  Новгородская область,  Новгородская область, г.о. Великий Новгород, г. Великий Новгород, ул. Мерецкова-Волосова, д 6",
+   "quantity": 0.0,
+   "items": [
+    {
+     "sum": 23623.13,
+     "costPerUnit": 23623.13,
+     "quantity": 1.0,
+     "name": "Поставка неисключительных (пользовательских) прав на использование программного обеспечения Dr.Web Desktop Security Suite  (продление лицензии)",
+     "buyerId": null,
+     "isBuyerInvitationSent": false,
+     "isApprovedByBuyer": null
+    },
+    {
+     "sum": 1100.0,
+     "costPerUnit": 1100.0,
+     "quantity": 1.0,
+     "name": "Расширение лицензии на Dr.Web Enterprise Security Suite сертифицированный ФСТЭК России (сертификат  № 3509)  CERT-FST",
+     "buyerId": null,
+     "isBuyerInvitationSent": false,
+     "isApprovedByBuyer": null
+    }
+   ],
+   "id": 9225444
+  }
+ ],
+ "files": [
+  {
+   "companyId": null,
+   "name": "Приложение № 1 описание объекта закупки.docx",
+   "id": 288444210
+  },
+  {
+   "companyId": null,
+   "name": "Проект контракта.doc",
+   "id": 288444185
+  },
+  {
+   "companyId": null,
+   "name": "Сублицензионное соглашение.docx",
+   "id": 288444195
+  }
+ ],
+ "licenseFiles": [],
+ "priceJustificationDocuments": [],
+ "shortDescriptionFile": null,
+ "offersSigned": false,
+ "showPurchaseRequestMessageIfFailed": false,
+ "purchaseTypeId": 1,
+ "contractCost": null,
+ "contracts": [],
+ "unpublishComment": null,
+ "externalId": null,
+ "isElectronicContractExecutionRequired": false,
+ "isContractGuaranteeRequired": false,
+ "contractGuaranteeAmount": null,
+ "rowVersion": "AAAAA1ZmFRQ=",
+ "organizingTypeId": 1,
+ "sharedPurchaseBuyers": null,
+ "suppliersAutobetSettings": [],
+ "isLicenseProduction": false,
+ "uploadLicenseDocumentsComment": null,
+ "isExternalIntegration": false,
+ "shortDescription": null,
+ "isMassCompleted": null,
+ "winnerTradingPlace": null,
+ "name": "Поставка программного обеспечения на условиях простой (неисключительной) лицензии ",
+ "id": 10355601,
+ "contactPerson": "Контактное лицо: Иванова Мария Петровна, +7 (495) 123-45-67"
+}
