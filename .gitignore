@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.claude/
+data/
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+node_modules/
+extension/dist/
+*.key
+*.pem

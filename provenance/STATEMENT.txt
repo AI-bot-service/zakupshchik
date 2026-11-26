@@ -1,0 +1,16 @@
+Заявление об авторстве
+
+Проект: «Закупщик» — робот по B2B-площадкам для продаж ПО.
+Хакатон «ИИкузница» 2026, задача «Робот по работе с маркетплейсами ПО».
+Авторы: команда «Нейрокод», GitHub-аккаунт AI-bot-service.
+Метка авторства: NK-ZKP-CF1A47A315CD
+Начало разработки кода: 26.11.2026, 10:00 мск.
+Ключ подписи: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICuXJtTWz8uIIsJ8yKG20siSSeJqRCUs+u/g/G/GuXwI
+
+Этот файл подписан закрытым ключом авторов (STATEMENT.txt.sig). Тем же ключом
+подписаны коммиты репозитория. Закрытый ключ есть только у авторов.
+
+Проверка:
+  ssh-keygen -Y verify -f provenance/allowed_signers -I neirokod@zakupshchik \
+    -n zakupshchik-authorship -s provenance/STATEMENT.txt.sig < provenance/STATEMENT.txt
+  git -c gpg.ssh.allowedSignersFile=provenance/allowed_signers log --show-signature
