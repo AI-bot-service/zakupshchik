@@ -9,7 +9,6 @@ x-image: &image
     context: ..
     target: runtime
   image: zakupshchik-app:0.1.0
-  networks: [shared_network]
   security_opt: ["no-new-privileges:true"]
   cap_drop: [ALL]
   read_only: true
@@ -20,11 +19,59 @@ services:
     <<: *image
     container_name: zakupshchik-infra-migrate
     command: ["alembic", "upgrade", "head"]
+    networks: [shared_network]
     environment:
       DATABASE_OWNER_URL: ${DATABASE_OWNER_URL:?нужен DATABASE_OWNER_URL}
     mem_limit: 256m
     memswap_limit: 256m
     restart: "no"
+
+  # Сбор с площадок по расписанию, префильтр, карточки. Каталог — из выгрузки data/store (только чтение)
+  worker:
+    <<: *image
+    container_name: zakupshchik-infra-worker
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DEBUG: ${DEBUG:-false}
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?нужен APP_SECRET_KEY}
+      DATABASE_URL: ${DATABASE_URL:?нужен DATABASE_URL}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL_MAIN: ${LLM_MODEL_MAIN}
+      LLM_MODEL_CHEAP: ${LLM_MODEL_CHEAP}
+      PROXY_URL: ${PROXY_URL:-}
+      COLLECT_INTERVAL_MIN: ${COLLECT_INTERVAL_MIN:-5}
+    volumes:
+      - ../data/store:/app/data/store:ro
+    healthcheck:
+      disable: true
+    mem_limit: 384m
+    memswap_limit: 384m
+    restart: unless-stopped
+    networks: [shared_network, egress]
+
+  # Только стенд на VPS (профиль tunnel): SOCKS туннеля рабочего ПК слушает 127.0.0.1 хоста.
+  # Пересылает с адреса шлюза сети egress и пускает только её контейнеры. PROXY_URL=socks5h://172.31.250.1:11080
+  proxy-relay:
+    <<: *image
+    profiles: [tunnel]
+    container_name: zakupshchik-infra-proxy-relay
+    command: ["python", "/relay/socks_relay.py"]
+    network_mode: host
+    environment:
+      RELAY_LISTEN: 172.31.250.1:11080
+      RELAY_TARGET: ${RELAY_TARGET:-127.0.0.1:1080}
+      RELAY_ALLOW: 172.31.250.0/29
+    volumes:
+      - ./socks_relay.py:/relay/socks_relay.py:ro
+    healthcheck:
+      disable: true
+    mem_limit: 64m
+    memswap_limit: 64m
+    restart: unless-stopped
 
   app:
     <<: *image
@@ -77,6 +124,13 @@ services:
       - "traefik.http.middlewares.zakupshchik-headers.headers.contentSecurityPolicy=default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 networks:
+  # Сеть воркера к ретранслятору: фиксированный шлюз, на нём слушает proxy-relay
+  egress:
+    name: zakupshchik-egress
+    ipam:
+      config:
+        - subnet: 172.31.250.0/29
+          gateway: 172.31.250.1
   traefik_network:
     external: true
     name: traefik-public

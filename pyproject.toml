@@ -71,3 +71,8 @@ warn_required_dynamic_aliases = true
 testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["."]
+
+[[tool.mypy.overrides]]
+# У apscheduler 3.x нет аннотаций типов; используем только add_job/start
+module = ["apscheduler.*"]
+ignore_missing_imports = true
