@@ -35,7 +35,7 @@ ADDRESS = (
 INTRO = "ПАО «Софтлайн» предлагает Вашему вниманию коммерческое предложение на следующих условиях:"
 SLOGAN = "We know we can\nDigital Transformation and Cybersecurity Solution Service Provider"
 HEAD = ("Артикул", "Наименование", "Кол-во", "Цена, руб.", "Сумма, руб.", "В т.ч. НДС, руб.")
-WIDTHS = (Cm(2.6), Cm(6.4), Cm(1.4), Cm(2.4), Cm(2.4), Cm(2.4))
+WIDTHS = (Cm(2.8), Cm(7.4), Cm(1.4), Cm(2.1), Cm(2.2), Cm(2.1))
 
 
 def money(value: Decimal | None) -> str:
@@ -105,6 +105,16 @@ def _no_borders(table: Table) -> None:
     table._tbl.tblPr.append(borders)
 
 
+def _widths(table: Table) -> None:
+    """Ширины и в сетке таблицы, и в ячейках: LibreOffice смотрит на сетку, Word — на ячейки."""
+    table.autofit = False
+    for col, width in zip(table._tbl.tblGrid.findall(qn("w:gridCol")), WIDTHS, strict=True):
+        col.set(qn("w:w"), str(width.twips))
+    for row in table.rows:
+        for cell, width in zip(row.cells, WIDTHS, strict=True):
+            cell.width = width
+
+
 def render_docx(draft: KpDraft, path: Path) -> Path:
     doc = Document()
     section = doc.sections[0]
@@ -151,16 +161,14 @@ def render_docx(draft: KpDraft, path: Path) -> Path:
         for i, (cell, value) in enumerate(zip(row, values, strict=True)):
             _cell(cell, value, align=WD_ALIGN_PARAGRAPH.LEFT if i == 1 else WD_ALIGN_PARAGRAPH.CENTER)
         if line.unit_price is None:
-            for cell in row[3:6]:
+            for cell in row[3:5] if line.vat_free else row[3:6]:
                 _fill(cell, BLANK_FILL)
     total = table.add_row().cells
     _cell(total[1], "Итого" if not draft.blank_prices else "Итого (без позиций с пустой ценой)", bold=True)
     _cell(total[4], money(draft.total), bold=True)
     vat_total = draft.vat_total
     _cell(total[5], "Без НДС" if vat_total is None else money(vat_total), bold=True)
-    for row in table.rows:
-        for cell, width in zip(row.cells, WIDTHS, strict=True):
-            cell.width = width
+    _widths(table)
 
     _para(doc)
     for note in (

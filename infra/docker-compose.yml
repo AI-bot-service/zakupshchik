@@ -30,6 +30,10 @@ services:
   # вложения закупок пишутся в data/files (владелец — uid 10001 из образа)
   worker:
     <<: *image
+    build:
+      context: ..
+      target: worker
+    image: zakupshchik-worker:0.1.0
     container_name: zakupshchik-infra-worker
     command: ["python", "-m", "app.worker"]
     depends_on:
@@ -51,8 +55,9 @@ services:
       - ../data/files:/app/data/files
     healthcheck:
       disable: true
-    mem_limit: 384m
-    memswap_limit: 384m
+    # LibreOffice при конвертации КП в PDF берёт ~200 МБ
+    mem_limit: 768m
+    memswap_limit: 768m
     restart: unless-stopped
     networks: [shared_network, egress]
 

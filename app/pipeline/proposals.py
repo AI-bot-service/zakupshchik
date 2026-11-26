@@ -2,7 +2,7 @@
 
 Без токенов: только сохранённый разбор агента, каталог и rules.yaml.
 Позиции не менялись → файл не пересобираем.
-Файл лежит рядом с документами закупки: FILES_DIR/<площадка>/<номер>/КП_<номер>_<дата>.docx.
+Файлы лежат рядом с документами закупки: FILES_DIR/<площадка>/<номер>/КП_<номер>_<дата>.docx (+ .pdf).
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.agent.schemas import Analysis
 from app.db.models import Deal, DealStatus, Platform, Proposal
 from app.kp.draft import blockers, build_draft
+from app.kp.pdf import to_pdf
 from app.kp.render import render_docx
 from app.pipeline.analysis import ANALYZED, catalog_items, deal_view
 from app.pipeline.attachments import FILES_DIR, deal_dir
@@ -29,6 +30,7 @@ class ProposalRun:
     made: int = 0
     unchanged: int = 0
     not_eligible: int = 0
+    pdf: int = 0
     paths: list[str] = field(default_factory=list)
 
 
@@ -61,11 +63,13 @@ def make_proposals(session: Session, rules: Rules, now: datetime, root: Path = F
         name = f"КП_{deal.external_id}_{draft.issued:%Y-%m-%d}" + (f"_v{version}" if version > 1 else "")
         path = deal_dir(root, codes[deal.platform_id], deal.external_id) / f"{name}.docx"
         render_docx(draft, path)
+        pdf = to_pdf(path)
+        run.pdf += pdf is not None
         session.add(
             Proposal(
                 deal_id=deal.id,
                 version=version,
-                items=draft.as_json(),
+                items={**draft.as_json(), "pdf": str(pdf) if pdf else None},
                 total=draft.total,
                 file_path=str(path),
             )

@@ -73,7 +73,9 @@ def test_render_blank_price_filled(tmp_path: Path) -> None:
     table = doc.tables[1]
     blank = table.rows[1].cells
     assert blank[0].text == "KL4863RAQFS" and blank[3].text == "" and blank[2].text == "50"
-    assert BLANK_FILL in blank[3]._tc.xml and BLANK_FILL not in table.rows[2].cells[3]._tc.xml
+    assert BLANK_FILL in blank[3]._tc.xml and BLANK_FILL in blank[4]._tc.xml
+    assert BLANK_FILL not in blank[5]._tc.xml  # «Без НДС» известно и без цены
+    assert BLANK_FILL not in table.rows[2].cells[3]._tc.xml
     total = table.rows[3].cells
     assert "без позиций с пустой ценой" in total[1].text
     assert total[4].text == "2 000,00" and total[5].text == "360,66"
