@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.adapters.config import PlatformConfig
@@ -35,7 +35,11 @@ def load_details(session: Session, fetcher: Fetcher, configs: list[PlatformConfi
         .where(
             Deal.status == DealStatus.NEW,
             Platform.code.in_(by_code),
-            ~Deal.raw_masked.has_key("details"),
+            # нет карточки или она в старом формате (файлы без id — их не скачать)
+            or_(
+                ~Deal.raw_masked.has_key("details"),
+                func.jsonb_typeof(Deal.raw_masked["details"]["files"][0]) == "string",
+            ),
         )
         .order_by(Deal.end_at.asc().nulls_last())
         .limit(limit)

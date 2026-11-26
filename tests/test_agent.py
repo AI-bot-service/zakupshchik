@@ -15,7 +15,7 @@ from app.agent.llm import LLMReply, Message, ToolCall
 from app.agent.schemas import Analysis, analysis_parameters
 from app.catalog.search import CatalogHit
 from app.db.models import CatalogItem, Deal, DealItem, Law, MatchKind, Procedure, TriState
-from app.pipeline.attachments import AttachmentError, AttachmentText, extract_text
+from app.pipeline.attachments import AttachmentError, AttachmentText, extract_text, file_path
 from app.scoring.rules import load_rules
 from app.scoring.score import DealView, evaluate
 
@@ -325,3 +325,14 @@ def test_explanation_with_invented_number_falls_back() -> None:
 def test_explanation_numbers_checked_with_spaces() -> None:
     expl = Explanation(why=["НМЦ 150 000 ₽, 5 из 5"], check="Проверить цену")
     assert check_numbers(expl, '{"НМЦ_руб": "150000.00", "n": "5 из 5"}') == []
+
+
+def test_file_path_by_platform_number_and_order() -> None:
+    root = Path("/data")
+    assert file_path(root, "mos_portal", "Need6322461", 1, "Техническое задание (К-Д.doc") == Path(
+        "/data/mos_portal/Need6322461/01_Техническое задание (К-Д.doc"
+    )
+    risky = file_path(root, "mos_portal", "../x", 12, "../../etc/passwd")
+    assert risky.parent.parent.parent == root and "/" not in risky.name and risky.name.startswith("12_")
+    long = file_path(root, "p", "1", 3, "а" * 300 + ".docx")
+    assert long.name.endswith(".docx") and len(long.name) <= 124

@@ -23,6 +23,7 @@ from app.core.logging import configure_logging
 from app.core.settings import Settings
 from app.db.session import make_engine, make_session_factory
 from app.pipeline.analysis import Models, rescore, run_analysis
+from app.pipeline.proposals import make_proposals
 from app.scoring.rules import RulesError, load_rules
 
 log = structlog.get_logger("worker")
@@ -63,6 +64,8 @@ def analyze(factory: sessionmaker[Session], settings: Settings) -> None:
         models = Models(settings.llm_model_main, settings.llm_model_cheap)
         with Fetcher(settings.proxy_url) as fetcher:
             run = run_analysis(factory, fetcher, platforms, vendors, rules, llm, models, now, ANALYZE_PER_RUN)
+        with factory.begin() as session:
+            kp = make_proposals(session, rules, now)
         log.info(
             "analyze_done",
             analyzed=run.analyzed,
@@ -71,6 +74,8 @@ def analyze(factory: sessionmaker[Session], settings: Settings) -> None:
             same_input=run.skipped_same_input,
             cost_rub=str(run.cost_rub),
             errors=len(run.errors),
+            kp_made=kp.made,
+            kp_not_eligible=kp.not_eligible,
             **stats,
         )
     except Exception as exc:  # сбой разбора — следующий по расписанию

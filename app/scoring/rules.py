@@ -58,10 +58,20 @@ class Notify(_Strict):
     urgent_hours_left: float = Field(gt=0)
 
 
+class Kp(_Strict):
+    valid_days: int = Field(ge=1, le=365)
+    vat_rate: Decimal = Field(ge=0, le=50)
+    default_payment: str = Field(min_length=3, max_length=100)
+    default_delivery: str = Field(min_length=3, max_length=100)
+    signer_name: str = Field(min_length=3, max_length=100)
+    signer_title: str = Field(min_length=3, max_length=100)
+
+
 class RuleProfile(_Strict):
     filters: Filters
     conditions: Conditions
     weights: Weights
+    kp: Kp
     notify: Notify
 
 

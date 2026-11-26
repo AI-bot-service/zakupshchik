@@ -137,8 +137,10 @@ def card_text(deal: Deal) -> str:
             )
     files = details.get("files") or []
     if files:
-        lines.append("Файлы закупки (id — имя):")
-        lines.extend(f"  {f['id']} — {f['name']}" for f in files if isinstance(f, dict))
+        lines.append("Файлы закупки (№, id для get_attachment_text — имя):")
+        lines.extend(
+            f"  {n}. id {f['id']} — {f['name']}" for n, f in enumerate(files, 1) if isinstance(f, dict)
+        )
     else:
         lines.append("Файлы закупки: нет в карточке")
     extra = {k: v for k, v in deal.raw_masked.items() if k != "details" and isinstance(v, str | int | float)}

@@ -1,6 +1,7 @@
 """Вложения закупки (ТЗ, проект договора): скачать один раз, сохранить, отдать агенту текст без ПДн.
 
-Файл и его текст лежат в FILES_DIR/<сделка>/<sha256>.<расширение> (+ .txt); запись — в deal_file.
+Файл и его текст: FILES_DIR/<площадка>/<номер закупки>/<NN>_<имя с площадки> (+ .txt), где NN —
+порядок файла в карточке закупки. В deal_file — тот же путь и sha256 (целостность, без дублей).
 Повторный запрос того же файла идёт из кэша, площадку второй раз не трогаем.
 """
 
@@ -41,6 +42,7 @@ _MIME = {
 # Текст Word 97–2003 хранится в UTF-16LE: латиница/цифры (xx 00) и кириллица (xx 04) идут подряд
 _DOC_RUNS = re.compile(rb"(?:[\x20-\x7e\x09\x0d]\x00|[\x00-\xff]\x04){6,}")
 _RTF_CONTROL = re.compile(r"\\[a-z]+-?\d* ?|[{}]")
+_UNSAFE = re.compile(r'[\x00-\x1f\\/:*?"<>|]+')
 
 
 class AttachmentError(ValueError):
@@ -124,18 +126,34 @@ def extract_text(name: str, data: bytes) -> str:
     return mask_text(text)
 
 
-def _file_meta(deal: Deal, file_id: str) -> dict[str, str]:
+def _file_meta(deal: Deal, file_id: str) -> tuple[int, dict[str, str]]:
+    """Номер файла в карточке (с 1) и его id/имя."""
     files = deal.raw_masked.get("details", {}).get("files", [])
-    for f in files if isinstance(files, list) else []:
+    for n, f in enumerate(files if isinstance(files, list) else [], 1):
         if isinstance(f, dict) and str(f.get("id")) == file_id:
-            return {"id": file_id, "name": str(f.get("name", file_id))}
+            return n, {"id": file_id, "name": str(f.get("name", file_id))}
     raise AttachmentError(f"у закупки нет файла с id {file_id}")
+
+
+def _safe(name: str, limit: int = 120) -> str:
+    name = _UNSAFE.sub("_", name).strip(" .") or "file"
+    stem, ext = Path(name).stem, Path(name).suffix[:10]
+    return stem[: limit - len(ext)] + ext
+
+
+def deal_dir(root: Path, platform: str, external_id: str) -> Path:
+    """Папка закупки: всё по одной сделке (документы площадки, их текст, наше КП) лежит вместе."""
+    return root / _safe(platform, 40) / _safe(external_id, 80)
+
+
+def file_path(root: Path, platform: str, external_id: str, n: int, name: str) -> Path:
+    return deal_dir(root, platform, external_id) / f"{n:02d}_{_safe(name)}"
 
 
 def get_attachment_text(
     session: Session, fetcher: Fetcher, cfg: PlatformConfig, deal: Deal, file_id: str, root: Path = FILES_DIR
 ) -> AttachmentText:
-    meta = _file_meta(deal, file_id)
+    n, meta = _file_meta(deal, file_id)
     spec = cfg.details
     if spec is None or spec.file_url is None:
         raise AttachmentError("площадка не отдаёт файлы без входа — открыть на площадке")
@@ -155,9 +173,8 @@ def get_attachment_text(
     text = extract_text(meta["name"], data)
     sha = hashlib.sha256(data).hexdigest()
     ext = Path(meta["name"]).suffix.lower()
-    folder = root / str(deal.id)
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{sha}{ext if ext in _MIME else ''}"
+    path = file_path(root, cfg.code, deal.external_id, n, meta["name"])
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     Path(str(path) + ".txt").write_text(text, encoding="utf-8")
     same = cached or session.scalar(

@@ -70,7 +70,7 @@ def deal_view(deal: Deal) -> DealView:
     )
 
 
-def _catalog(session: Session, analysis: Analysis) -> dict[int, CatalogItem]:
+def catalog_items(session: Session, analysis: Analysis) -> dict[int, CatalogItem]:
     ids = {p.catalog_item_id for p in analysis.positions if p.catalog_item_id is not None}
     if not ids:
         return {}
@@ -204,6 +204,8 @@ def run_analysis(
                 log.exception("agent_failed", deal_id=deal.id)
                 journal.add("agent", error={"code": "agent_failed", "message_ru": type(exc).__name__})
                 run.errors.append(f"{deal.id}: {type(exc).__name__}")
+                if len(run.errors) >= 2:  # шлюз лежит или кончились деньги — не гоняем остальные сделки
+                    break
                 continue
             run.cost_rub += res.cost_rub
             _save_agent(deal, res, models.main)
@@ -213,7 +215,7 @@ def run_analysis(
                 run.needs_human += 1
                 journal.add("agent", output={"needs_human": res.needs_human})
                 continue
-            items = _catalog(session, res.analysis)
+            items = catalog_items(session, res.analysis)
             result = evaluate(deal_view(deal), res.analysis, items, rules, now)
             _apply_score(session, deal, res.analysis, result, rules)
             expl = explain(
@@ -243,7 +245,7 @@ def rescore(session: Session, rules: Rules, now: datetime) -> dict[str, int]:
             continue
         analysis = Analysis.model_validate(raw)
         before = (deal.conditions_met, deal.status)
-        items = _catalog(session, analysis)
+        items = catalog_items(session, analysis)
         result = evaluate(deal_view(deal), analysis, items, rules, now)
         _apply_score(session, deal, analysis, result, rules)
         stats["rescored"] += 1
