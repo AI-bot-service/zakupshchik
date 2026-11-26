@@ -28,7 +28,6 @@ _REFRESHABLE = (
     "nmck",
     "start_at",
     "end_at",
-    "raw_masked",
 )
 
 
@@ -80,7 +79,14 @@ def save_deals(session: Session, platform_id: PlatformId, deals: list[DealData])
     # xmax = 0 у строки, которую вставили, а не обновили
     upsert: ReturningInsert[tuple[bool]] = base.on_conflict_do_update(
         index_elements=[Deal.platform_id, Deal.external_id],
-        set_={name: base.excluded[name] for name in _REFRESHABLE} | {"updated_at": func.now()},
+        set_={name: base.excluded[name] for name in _REFRESHABLE}
+        | {
+            # Свежие поля списка + уже загруженная карточка: иначе каждый цикл заново качал бы карточки
+            "raw_masked": base.excluded.raw_masked.op("||")(
+                func.jsonb_strip_nulls(func.jsonb_build_object("details", Deal.raw_masked["details"]))
+            ),
+            "updated_at": func.now(),
+        },
     ).returning(literal_column("(xmax = 0)"))
     inserted = [bool(flag) for (flag,) in session.execute(upsert).all()]
     new = sum(inserted)

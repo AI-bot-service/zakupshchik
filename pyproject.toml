@@ -76,3 +76,8 @@ pythonpath = ["."]
 # У apscheduler 3.x нет аннотаций типов; используем только add_job/start
 module = ["apscheduler.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# openpyxl без аннотаций; вызываем только load_workbook/iter_rows при чтении вложений
+module = ["openpyxl.*"]
+ignore_missing_imports = true

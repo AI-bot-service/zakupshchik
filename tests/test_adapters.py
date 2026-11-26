@@ -140,7 +140,7 @@ def test_mos_portal_details_need_and_auction() -> None:
     assert need.items[0].okpd and need.items[0].unit_price == Decimal("11747.13")
     assert need.extra["conclusion_reason"].startswith("п. 5 ч. 1 ст. 93")
     assert "payment_terms" not in need.extra  # «-» на площадке = не указано
-    assert need.files and "Проект контракта" in need.files[0]
+    assert need.files and "Проект контракта" in need.files[0].name and need.files[0].id == "288445891"
     auction = parse_details(fixture("mos_portal_auction.json"), spec)
     assert len(auction.items) == 2 and auction.items[0].unit == "усл. ед"
     assert auction.extra["okpd_name"] == "Обеспечение программное сетевое на электронном носителе"

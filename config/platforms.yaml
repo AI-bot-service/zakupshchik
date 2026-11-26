@@ -69,6 +69,7 @@ platforms:
         national_regime: nationalRegimeRestrictions
         participant_requirements: additionalParticipantRequirements
       files_path: files
+      file_url: "https://zakupki.mos.ru/newapi/api/FileStorage/Download?id={id}"
 
   - code: tektorg_market
     name: ТЭК-Торг — Интернет-магазин (закупки малого объёма)

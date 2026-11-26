@@ -9,13 +9,13 @@ from decimal import Decimal
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.db.models import Procedure
 
 RULES_FILE = Path(__file__).resolve().parents[2] / "config" / "rules.yaml"
 # Поднимать при изменении кода префильтра или оценки: версия правил меняется, сделки пересчитываются
-LOGIC_VERSION = b"prefilter-2"
+LOGIC_VERSION = b"prefilter-2/score-1"
 
 
 class _Strict(BaseModel):
@@ -38,6 +38,21 @@ class Conditions(_Strict):
     min_hours_for_kp: float = Field(ge=0)
 
 
+class Weights(_Strict):
+    coverage: float = Field(ge=0, le=1)
+    margin: float = Field(ge=0, le=1)
+    amount: float = Field(ge=0, le=1)
+    payment: float = Field(ge=0, le=1)
+    simplicity: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _sum_is_one(self) -> Weights:
+        total = self.coverage + self.margin + self.amount + self.payment + self.simplicity
+        if abs(total - 1) > 1e-6:
+            raise ValueError(f"сумма весов {total:g}, должна быть 1")
+        return self
+
+
 class Notify(_Strict):
     daily_report_at: time
     urgent_hours_left: float = Field(gt=0)
@@ -46,6 +61,7 @@ class Notify(_Strict):
 class RuleProfile(_Strict):
     filters: Filters
     conditions: Conditions
+    weights: Weights
     notify: Notify
 
 

@@ -64,6 +64,8 @@ class DetailsConfig(BaseModel):
     # Текстовые поля карточки (белый список) → raw_masked.details после маскирования ПДн
     keep: dict[str, FieldSpec] = Field(default_factory=dict)
     files_path: str | None = None
+    # Скачивание вложения: шаблон от полей файла ({id}, {name}). Только публичные ссылки, без входа
+    file_url: str | None = Field(default=None, pattern=r"^https://")
 
 
 class PlatformConfig(BaseModel):

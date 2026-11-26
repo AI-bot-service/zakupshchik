@@ -16,6 +16,10 @@ from app.adapters.config import PlatformConfig
 USER_AGENT = "Mozilla/5.0 (compatible; Zakupshchik/0.1; +https://zakupki-robot.systemtool.ru/status)"
 
 
+class FileTooLargeError(ValueError):
+    pass
+
+
 def _fill(value: Any, query: str) -> Any:
     if isinstance(value, str):
         return value.replace("{query}", query)
@@ -77,16 +81,43 @@ class Fetcher:
         """Страница поиска площадки по слову."""
         return self.get_url(cfg, cfg.url, build_params(cfg, query))
 
+    def get_url(self, cfg: PlatformConfig, url: str, params: dict[str, str | list[str]] | None = None) -> str:
+        return self._get(cfg, url, params).text
+
     @retry(
         retry=retry_if_exception(_retryable),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=3, max=20),
         reraise=True,
     )
-    def get_url(self, cfg: PlatformConfig, url: str, params: dict[str, str | list[str]] | None = None) -> str:
+    def get_bytes(self, cfg: PlatformConfig, url: str, max_bytes: int) -> bytes:
+        """Вложение закупки. Больше max_bytes — отказ, файл целиком в память не берём."""
+        if not url.startswith("https://"):
+            raise ValueError("площадки опрашиваем только по https")
+        self._wait_turn(cfg)
+        with self._client.stream("GET", url) as resp:
+            resp.raise_for_status()
+            chunks: list[bytes] = []
+            size = 0
+            for chunk in resp.iter_bytes():
+                size += len(chunk)
+                if size > max_bytes:
+                    raise FileTooLargeError(f"файл больше {max_bytes // 1_000_000} МБ")
+                chunks.append(chunk)
+        return b"".join(chunks)
+
+    @retry(
+        retry=retry_if_exception(_retryable),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=3, max=20),
+        reraise=True,
+    )
+    def _get(
+        self, cfg: PlatformConfig, url: str, params: dict[str, str | list[str]] | None
+    ) -> httpx.Response:
         if not url.startswith("https://"):
             raise ValueError("площадки опрашиваем только по https")
         self._wait_turn(cfg)
         resp = self._client.get(url, params=params)
         resp.raise_for_status()
-        return resp.text
+        return resp

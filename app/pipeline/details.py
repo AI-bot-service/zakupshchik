@@ -59,7 +59,8 @@ def load_details(session: Session, fetcher: Fetcher, configs: list[PlatformConfi
             run.errors.append(f"{deal.external_id}: {exc}")
             continue
         deal.items = [DealItem(**item.model_dump()) for item in details.items]
-        deal.raw_masked = {**deal.raw_masked, "details": {**details.extra, "files": details.files}}
+        files = [f.model_dump() for f in details.files]
+        deal.raw_masked = {**deal.raw_masked, "details": {**details.extra, "files": files}}
         deal.rules_version = None
         run.loaded += 1
     return run

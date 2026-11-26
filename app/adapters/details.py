@@ -24,13 +24,20 @@ class ItemData(BaseModel):
     okpd: str | None
 
 
+class FileRef(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    id: str
+    name: str
+
+
 class DealDetails(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
     items: list[ItemData]
     # Условия карточки после маскирования ПДн: оплата, основание, доставка, требования
     extra: dict[str, Any]
-    files: list[str]
+    files: list[FileRef]
 
 
 def details_url(cfg: DetailsConfig, context: dict[str, Any]) -> str | None:
@@ -83,8 +90,8 @@ def parse_details(text: str, cfg: DetailsConfig) -> DealDetails:
     extra = {k: mask(v) for k, spec in cfg.keep.items() if (v := resolve(data, spec)) not in (None, "", "-")}
     files_raw = get_path(data, cfg.files_path) if cfg.files_path else None
     files = [
-        mask_text(str(x["name"]))
+        FileRef(id=str(x["id"]), name=mask_text(str(x["name"]))[:255])
         for x in (files_raw if isinstance(files_raw, list) else [])
-        if isinstance(x, dict) and x.get("name")
+        if isinstance(x, dict) and x.get("name") and x.get("id") is not None
     ]
     return DealDetails(items=items, extra=extra, files=files)
