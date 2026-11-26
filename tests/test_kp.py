@@ -79,3 +79,12 @@ def test_render_blank_price_filled(tmp_path: Path) -> None:
     total = table.rows[3].cells
     assert "без позиций с пустой ценой" in total[1].text
     assert total[4].text == "2 000,00" and total[5].text == "360,66"
+
+
+def test_render_all_blank_total_not_zero(tmp_path: Path) -> None:
+    item = catalog_item(price=None)
+    item.rf_registry_no = None
+    draft = build_draft(make_deal(), analysis(), {501: item}, KP, NOW.date())
+    total = Document(str(render_docx(draft, tmp_path / "kp.docx"))).tables[1].rows[2].cells
+    assert total[4].text == "" and total[5].text == ""  # не «0,00» и не «Без НДС»
+    assert BLANK_FILL in total[4]._tc.xml and BLANK_FILL in total[5]._tc.xml

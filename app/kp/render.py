@@ -165,9 +165,15 @@ def render_docx(draft: KpDraft, path: Path) -> Path:
                 _fill(cell, BLANK_FILL)
     total = table.add_row().cells
     _cell(total[1], "Итого" if not draft.blank_prices else "Итого (без позиций с пустой ценой)", bold=True)
-    _cell(total[4], money(draft.total), bold=True)
+    priced = draft.blank_prices < len(draft.lines)
+    _cell(total[4], money(draft.total) if priced else "", bold=True)
     vat_total = draft.vat_total
-    _cell(total[5], "Без НДС" if vat_total is None else money(vat_total), bold=True)
+    all_free = all(ln.vat_free for ln in draft.lines)
+    _cell(total[5], "Без НДС" if all_free else money(vat_total), bold=True)
+    if not priced:
+        _fill(total[4], BLANK_FILL)
+    if not all_free and vat_total is None:
+        _fill(total[5], BLANK_FILL)
     _widths(table)
 
     _para(doc)
