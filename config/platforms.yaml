@@ -1,0 +1,124 @@
+# Площадки робота (ARCHITECTURE.md §3.1). Новая площадка — запись здесь, код не нужен, если она ложится в один из видов:
+#   json      — площадка отдаёт JSON (вид A)
+#   next_data — страница Next.js, список лежит в <script id="__NEXT_DATA__"> (вид A, JSON внутри HTML)
+#   next_rsc  — страница Next.js App Router, карточки в потоке RSC (вид B)
+# Поля сделки (fields): путь в записи ("a.b.0.c"), шаблон ("https://…/{id}") или список вариантов — берётся первый непустой.
+# Словари procedure_map / law_map переводят слова площадки в единые значения (app/db/models.py: Procedure, Law).
+# Запросы — по словам из queries, не чаще 1 запроса в min_interval_s секунд на площадку.
+
+platforms:
+  - code: mos_portal
+    name: Портал поставщиков Москвы
+    kind: json
+    url: https://old.zakupki.mos.ru/api/Cssp/Purchase/Query
+    min_interval_s: 3
+    queries: ["программного обеспечения", "лицензи", "неисключительных прав", "антивирус"]
+    json_params:
+      queryDto:
+        filter:
+          nameLike: { value: "{query}" }
+          auctionSpecificFilter: { stateIdIn: [19000002] }
+          needSpecificFilter: { stateIdIn: [20000002] }
+          tenderSpecificFilter: { stateIdIn: [5] }
+        order: [{ field: PublishDate, desc: true }]
+        withCount: true
+        take: 50
+        skip: 0
+    items_path: items
+    fields:
+      external_id: "{id}"
+      url:
+        - "https://zakupki.mos.ru/need/view?needId={needId}"
+        - "https://zakupki.mos.ru/auction/view?auctionId={auctionId}"
+        - "https://zakupki.mos.ru/tender/view?tenderId={tenderId}"
+      title: name
+      customer_name: customers.0.name
+      customer_inn: customers.0.inn
+      region: regionName
+      nmck: startPrice
+      start_at: beginDate
+      end_at: endDate
+      procedure_raw: tradeType
+      law_raw: federalLawName
+    date_formats: ["%d.%m.%Y %H:%M:%S"]
+    procedure_map:
+      "1": quotation_session   # котировочная сессия, п. 4/5 ч. 1 ст. 93 44-ФЗ
+      "2": single_supplier     # закупка по потребности у единственного поставщика
+      "3": tender
+    law_map: { "44-ФЗ": "44", "44-ФЗ (46-ФЗ)": "44", "223-ФЗ": "223" }
+    keep_raw: [tradeType, number, stateName, federalLawName, isB2B, offerCount, regionPath]
+
+  - code: tektorg_market
+    name: ТЭК-Торг — Интернет-магазин (закупки малого объёма)
+    kind: next_data
+    url: https://www.tektorg.ru/market/procedures
+    min_interval_s: 4
+    queries: ["программного обеспечения", "лицензи", "неисключительн", "антивирус"]
+    params: { name: "{query}" }
+    items_path: props.pageProps.initialReduxState.listingProcedures.data
+    fields:
+      external_id: "{id}"
+      url: "https://www.tektorg.ru/market/procedures/{id}"
+      title: title
+      customer_name: organizerName
+      customer_inn: inn
+      nmck: sumPrice
+      start_at: dates.datePublished
+      end_at: dates.dateEndRegistration
+      procedure_raw: typeName
+      smb_flag: smallBiz
+    law_default: unknown
+    procedure_map:
+      "Закупка малого объема": small_purchase
+      "Ценовой запрос": request_kp
+      "Ценовой запрос (с закрытыми ценами)": request_kp
+      "Анализ рынка": request_kp
+      "Запрос котировок": request_quotes
+      "Запрос предложений": request_proposals
+      "Конкурс": tender
+      "Аукцион": auction
+    keep_raw: [registryNumber, statusName, typeName, sectionAlias, securityDepositEnabled, smallBiz, okpd2]
+
+  - code: fabrikant
+    name: Фабрикант — коммерческие закупки и Маркет
+    kind: next_rsc
+    url: https://www.fabrikant.ru/procedure/search/purchases
+    min_interval_s: 4
+    queries: ["программного обеспечения", "лицензи", "неисключительн", "антивирус"]
+    params:
+      query: "{query}"
+      "section_ids[]": ["2", "16"]   # коммерческие закупки, Маркет
+      "statuses[]": "1"              # приём заявок
+      page_limit: "40"
+    card_labels:
+      "Организатор": customer_name
+      "Заказчик": customer_name
+      "Дата публикации": start_at
+      "Дата окончания приёма заявок": end_at
+    card_suffix_labels:
+      "начальная цена": nmck
+    fields:
+      external_id: "{lotId}"
+      url: url
+      title: name
+      customer_name: customer_name
+      nmck: nmck
+      start_at: start_at
+      end_at: end_at
+      procedure_raw: blocks.0
+    date_formats: ["%d.%m.%Y %H:%M"]
+    law_default: commercial
+    procedure_map:
+      "Запрос цен": request_kp
+      "Запрос КП": request_kp
+      "Сбор коммерческих предложений": request_kp
+      "Маркет": small_purchase
+      "Электронный магазин (Коммерческие закупки)": small_purchase
+      "Закупка малого объема": small_purchase
+      "Запрос котировок": request_quotes
+      "Запрос предложений": request_proposals
+      "Тендер": tender
+      "Конкурс": tender
+      "Аукцион": auction
+      "Редукцион": auction
+    keep_raw: [procedureNumber, sectionEnum, blocks]

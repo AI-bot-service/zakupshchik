@@ -20,6 +20,8 @@ def _drop_secrets(_: object, __: str, event: MutableMapping[str, Any]) -> Mutabl
 
 def configure_logging(debug: bool) -> None:
     logging.basicConfig(format="%(message)s", level=logging.DEBUG if debug else logging.INFO)
+    # Строка запроса httpx содержит полный URL с параметрами — в журнал только наши шаги
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

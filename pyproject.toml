@@ -52,6 +52,9 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # кириллица в строках 
 "tests/**" = ["S101", "S105", "S106", "S107", "ANN"]
 "alembic/**" = ["ANN", "E501"]
 "scripts/**" = ["S310", "ANN", "S311"]
+# Разбор чужого JSON и HTML: значения динамические по природе, проверка — на границе в Pydantic (DealData)
+"app/adapters/**" = ["ANN401"]
+"app/core/pii.py" = ["ANN401"]
 
 [tool.mypy]
 strict = true
