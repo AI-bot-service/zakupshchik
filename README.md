@@ -18,9 +18,14 @@ https://zakupki-robot.systemtool.ru — работает с 10:00 28.11 до 23:
 ## Запуск
 
 ```bash
-cp .env.example .env   # заполнить значения
-cd infra && docker compose --env-file ../.env up -d
+cp .env.example .env            # заполнить значения; БД и роли — по комментариям в файле
+cd infra && docker compose --env-file ../.env up -d --build
+curl -s https://$DOMAIN/api/status   # приложение и база в порядке
 ```
+
+`migrate` применяет миграции Alembic под ролью владельца и завершается, `app` стартует после него под рабочей
+ролью без прав владельца (только чтение и запись данных). Проверки кода — в том же образе:
+`docker build --target test -t zakupshchik-test . && docker run --rm zakupshchik-test` (ruff, mypy --strict, pytest).
 
 ## Планы
 

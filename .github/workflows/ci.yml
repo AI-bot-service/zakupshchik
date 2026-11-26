@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      # Тот же образ, что в проде: ruff, mypy --strict и pytest на python 3.13.18-alpine
+      - name: ruff + mypy + pytest
+        run: |
+          docker build --target test -t zakupshchik-test .
+          docker run --rm zakupshchik-test

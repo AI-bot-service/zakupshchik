@@ -1,0 +1,70 @@
+[project]
+name = "zakupshchik"
+version = "0.1.0"
+description = "Робот по B2B-площадкам для продаж ПО: находит закупку, сверяет с каталогом, готовит КП менеджеру"
+requires-python = ">=3.13,<3.14"
+license = { file = "LICENSE" }
+# Версии сверены с PyPI и OSV 26.11.2026 (все без известных уязвимостей). Поднимаем только при новой уязвимости.
+dependencies = [
+    "fastapi==0.165.0",
+    "starlette==1.10.0",
+    "pydantic==2.14.4",
+    "pydantic-settings==2.16.3",
+    "uvicorn==0.54.0",
+    "python-multipart==0.0.34",
+    "itsdangerous==2.2.0",
+    "jinja2==3.1.6",
+    "httpx[socks]==0.28.1",
+    "socksio==1.0.0",
+    "tenacity==9.2.1",
+    "sqlalchemy==2.1.9",
+    "alembic==1.20.1",
+    "psycopg[binary]==3.3.9",
+    "apscheduler==3.11.3",
+    "openai==3.58.0",
+    "python-docx==1.2.0",
+    "pypdf==7.1.1",
+    "openpyxl==3.1.5",
+    "pyyaml==6.0.4",
+    "structlog==26.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "mypy==2.4.1",
+    "ruff==0.17.6",
+    "types-pyyaml==6.0.12.20261122",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "ANN"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # кириллица в строках и комментариях — норма для проекта
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S107", "ANN"]
+"alembic/**" = ["ANN", "E501"]
+"scripts/**" = ["S310", "ANN", "S311"]
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+plugins = ["pydantic.mypy"]
+files = ["app", "tests"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["."]

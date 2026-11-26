@@ -1,0 +1,85 @@
+name: zakupshchik
+
+# Запуск только с --env-file ../.env (compose лежит в infra/, .env в корне), иначе ${DOMAIN} пустой и Traefik даёт 404:
+#   cd infra && docker compose --env-file ../.env up -d --build
+# Переменные передаются каждому сервису явно: URL владельца БД получает только migrate.
+
+x-image: &image
+  build:
+    context: ..
+    target: runtime
+  image: zakupshchik-app:0.1.0
+  networks: [shared_network]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: [/tmp]
+
+services:
+  migrate:
+    <<: *image
+    container_name: zakupshchik-infra-migrate
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_OWNER_URL: ${DATABASE_OWNER_URL:?нужен DATABASE_OWNER_URL}
+    mem_limit: 256m
+    memswap_limit: 256m
+    restart: "no"
+
+  app:
+    <<: *image
+    container_name: zakupshchik-infra-app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DOMAIN: ${DOMAIN:?нужен DOMAIN}
+      DEBUG: ${DEBUG:-false}
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?нужен APP_SECRET_KEY}
+      DATABASE_URL: ${DATABASE_URL:?нужен DATABASE_URL}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL_MAIN: ${LLM_MODEL_MAIN}
+      LLM_MODEL_CHEAP: ${LLM_MODEL_CHEAP}
+      PROXY_URL: ${PROXY_URL:-}
+      JURY_LOGIN: ${JURY_LOGIN:-jury}
+      JURY_PASSWORD: ${JURY_PASSWORD:?нужен JURY_PASSWORD}
+    mem_limit: 512m
+    memswap_limit: 512m
+    restart: unless-stopped
+    networks: [shared_network, traefik_network]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.http.routers.zakupshchik.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.zakupshchik.entrypoints=websecure
+      - traefik.http.routers.zakupshchik.tls=true
+      - traefik.http.routers.zakupshchik.tls.certresolver=letsencrypt
+      - traefik.http.routers.zakupshchik.middlewares=zakupshchik-headers,zakupshchik-body
+      - traefik.http.routers.zakupshchik.service=zakupshchik
+      # Вход — отдельный маршрут с ограничением частоты (перебор пароля жюри)
+      - traefik.http.routers.zakupshchik-login.rule=Host(`${DOMAIN}`) && Path(`/login`)
+      - traefik.http.routers.zakupshchik-login.entrypoints=websecure
+      - traefik.http.routers.zakupshchik-login.tls=true
+      - traefik.http.routers.zakupshchik-login.tls.certresolver=letsencrypt
+      - traefik.http.routers.zakupshchik-login.priority=100
+      - traefik.http.routers.zakupshchik-login.middlewares=zakupshchik-headers,zakupshchik-body,zakupshchik-login-rl
+      - traefik.http.routers.zakupshchik-login.service=zakupshchik
+      - traefik.http.services.zakupshchik.loadbalancer.server.port=8000
+      - traefik.http.middlewares.zakupshchik-login-rl.ratelimit.average=10
+      - traefik.http.middlewares.zakupshchik-login-rl.ratelimit.period=1m
+      - traefik.http.middlewares.zakupshchik-login-rl.ratelimit.burst=5
+      - traefik.http.middlewares.zakupshchik-body.buffering.maxRequestBodyBytes=2000000
+      - traefik.http.middlewares.zakupshchik-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.zakupshchik-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.zakupshchik-headers.headers.referrerPolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.zakupshchik-headers.headers.customFrameOptionsValue=DENY
+      - "traefik.http.middlewares.zakupshchik-headers.headers.contentSecurityPolicy=default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+networks:
+  traefik_network:
+    external: true
+    name: traefik-public
+  shared_network:
+    external: true
+    name: shared_network

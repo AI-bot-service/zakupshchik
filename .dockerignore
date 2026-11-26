@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.env
+.env.*
+!.env.example
+data
+infra
+provenance
+scripts
+**/__pycache__
+.venv
+.mypy_cache
+.ruff_cache
+.pytest_cache
+node_modules
+extension

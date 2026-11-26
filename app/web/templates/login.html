@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Вход · Закупщик{% endblock %}
+{% block content %}
+<div class="login">
+  <form class="login-form" method="post" action="/login">
+    <h1>Вход на стенд</h1>
+    {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+    <div class="field">
+      <label for="login">Логин</label>
+      <input id="login" name="login" autocomplete="username" required maxlength="64" autofocus>
+    </div>
+    <div class="field">
+      <label for="password">Пароль</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256">
+    </div>
+    <button class="btn btn-primary" type="submit">Войти</button>
+  </form>
+
+  <section aria-labelledby="chain-title">
+    <h2 id="chain-title" class="chain-title">Что робот делает с каждой закупкой</h2>
+    <ol class="chain">
+      <li><span><b>Находит закупку ПО на площадке</b><span class="muted">Только открытые страницы, без входа в кабинеты.</span></span></li>
+      <li><span><b>Сверяет позиции с каталогом Softline</b><span class="muted">Артикул, редакция, срок лицензии, цена из магазина.</span></span></li>
+      <li><span><b>Проверяет пять условий</b><span class="muted">Сумма до 1 млн ₽, без конкурса, не только для МСП, оплата, успеваем по сроку.</span></span></li>
+      <li><span><b>Готовит КП по шаблону Softline</b><span class="muted">Пустая цена выделена цветом, её ставит менеджер.</span></span></li>
+      <li><span><b>Присылает менеджеру с объяснением</b><span class="muted">Почему стоит идти в сделку и какие риски. Подаёт КП человек.</span></span></li>
+    </ol>
+  </section>
+</div>
+{% endblock %}

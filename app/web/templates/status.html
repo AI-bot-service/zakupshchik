@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Состояние стенда · Закупщик{% endblock %}
+{% block content %}
+<div class="status-head">
+  <h1>Состояние стенда</h1>
+  <div class="stamp {{ 'stamp-ok' if report.ok else 'stamp-down' }}" role="status">
+    <span class="stamp-main">{{ 'Стенд работает' if report.ok else 'Есть сбой' }}</span>
+    <span class="stamp-date">проверено {{ report.checked_at | msk }}</span>
+  </div>
+</div>
+<section class="sheet" aria-label="Компоненты">
+  <ul class="components">
+    {% for c in report.components %}
+    <li>
+      <span><b>{{ c.name }}</b> <span class="muted">{{ c.note_ru }}</span></span>
+      <span class="badge {{ 'badge-ok' if c.state == 'ok' else 'badge-down' }}">{{ 'в порядке' if c.state == 'ok' else 'не отвечает' }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+<p class="muted note">Версия {{ report.version }}. Данные для проверок: <a href="/api/status">/api/status</a>.</p>
+{% endblock %}
