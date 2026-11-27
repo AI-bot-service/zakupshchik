@@ -24,3 +24,8 @@ document.addEventListener("click", async (event) => {
     btn.classList.remove("is-copied");
   }, 2000);
 });
+
+// Страница с новым ключом — ответ на POST. Подменяем адрес, чтобы F5 открывал /extension, а не слал форму заново.
+if (document.getElementById("ext-key") && location.pathname === "/extension/key") {
+  history.replaceState(null, "", "/extension");
+}

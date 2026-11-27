@@ -186,6 +186,7 @@ def _page_ctx(request: Request, session: Session, user: str, key: str | None) ->
     return {
         "user": user,
         "csrf": csrf_token(request),
+        "issue_nonce": _new_issue_nonce(request),
         "key": key,
         "keys": [
             {
@@ -203,6 +204,16 @@ def _page_ctx(request: Request, session: Session, user: str, key: str | None) ->
     }
 
 
+ISSUE_NONCE_KEY = "ext_issue_nonce"
+
+
+def _new_issue_nonce(request: Request) -> str:
+    """Одноразовый токен формы выпуска: повторная отправка той же формы (F5) ключ не выпускает."""
+    nonce = secrets.token_urlsafe(16)
+    request.session[ISSUE_NONCE_KEY] = nonce
+    return nonce
+
+
 @pages.get("/extension", response_class=HTMLResponse)
 def extension_page(request: Request, user: User, session: Db) -> HTMLResponse:
     return request.app.state.templates.TemplateResponse(  # type: ignore[no-any-return]
@@ -218,9 +229,13 @@ def extension_key(
     user: User,
     session: Db,
     csrf: Annotated[str, Form(max_length=64)],
+    nonce: Annotated[str, Form(max_length=64)] = "",
     label: Annotated[str, Form(max_length=80)] = "",
-) -> HTMLResponse:
+) -> Response:
     check_csrf(request, csrf)
+    expected = request.session.pop(ISSUE_NONCE_KEY, None)
+    if not isinstance(expected, str) or not secrets.compare_digest(expected, nonce):
+        return RedirectResponse("/extension", status_code=status.HTTP_303_SEE_OTHER)
     key = issue_key(session, user, label)
     response: HTMLResponse = request.app.state.templates.TemplateResponse(
         request,
