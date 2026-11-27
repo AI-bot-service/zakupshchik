@@ -50,6 +50,11 @@ services:
       PROXY_URL: ${PROXY_URL:-}
       COLLECT_INTERVAL_MIN: ${COLLECT_INTERVAL_MIN:-5}
       ANALYZE_PER_RUN: ${ANALYZE_PER_RUN:-4}
+      DOMAIN: ${DOMAIN:?нужен DOMAIN}
+      POSTBOX_ACCESS_KEY_ID: ${POSTBOX_ACCESS_KEY_ID:-}
+      POSTBOX_SECRET_KEY: ${POSTBOX_SECRET_KEY:-}
+      POSTBOX_FROM: ${POSTBOX_FROM:-}
+      NOTIFY_TO: ${NOTIFY_TO:-}
     volumes:
       - ../data/store:/app/data/store:ro
       - ../data/files:/app/data/files
