@@ -29,6 +29,7 @@ from app.db.models import (
     Platform,
     Proposal,
 )
+from app.notify.letter_html import deal_html
 from app.notify.letters import DealLetter, daily_text, deal_subject, deal_text
 from app.notify.postbox import Attachment, Mailer, MailError
 from app.pipeline.analysis import catalog_items
@@ -82,11 +83,17 @@ def _record(
 
 
 def _send(
-    session: Session, mailer: Mailer, row: Notification, subject: str, text: str, files: list[Attachment]
+    session: Session,
+    mailer: Mailer,
+    row: Notification,
+    subject: str,
+    text: str,
+    files: list[Attachment],
+    html: str | None = None,
 ) -> bool:
     row.attempts += 1
     try:
-        mailer.send(row.recipient, subject, text, files)
+        mailer.send(row.recipient, subject, text, files, html)
     except MailError as exc:
         row.last_error = str(exc)[:500]
         row.status = NotifyStatus.FAILED if row.attempts >= MAX_ATTEMPTS else NotifyStatus.PENDING
@@ -193,10 +200,11 @@ def notify_deals(
             card_url=f"{public_url}/deals/{deal.id}",
         )
         subject, text = deal_subject(deal, analysis, now), deal_text(letter, now)
+        html = deal_html(letter, now)
         excel, _ = build_report(session, rules, now, Period(None, None, False, f"сделка №{deal.id}", deal.id))
         sheet = Attachment(f"zakupshchik-{deal.external_id}.xlsx", excel, _MIME[".xlsx"])
         for row in todo:
-            if _send(session, mailer, row, subject, text, [sheet, *kp_files, *docs]):
+            if _send(session, mailer, row, subject, text, [sheet, *kp_files, *docs], html):
                 run.deal_letters += 1
             else:
                 run.failed += 1

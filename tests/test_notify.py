@@ -3,6 +3,7 @@ from email import message_from_bytes, policy
 
 from app.agent.schemas import Analysis
 from app.db.models import ContractFormat, PaymentTerms, TriState
+from app.notify.letter_html import deal_html
 from app.notify.letters import DealLetter, deal_subject, deal_text
 from app.notify.postbox import Attachment, build_mime, sign_v4
 from tests.test_agent import NOW, analysis_args, catalog_item, make_deal
@@ -71,3 +72,33 @@ def test_deal_letter() -> None:
     assert "КП во вложении: КП_x1.docx, КП_x1.pdf" in text and "подтверждает менеджер" in text
     assert "https://stand.example/deals/1" in text and deal.url in text
     assert "осталось 72 ч" in text
+
+
+def test_deal_html_escapes_platform_text_and_has_text_fallback() -> None:
+    deal = make_deal()
+    deal.conditions_met = 5
+    deal.customer_name = '<script>alert(1)</script> "Школа"'
+    deal.score_breakdown = {
+        "score": {"conditions": [{"key": "catalog", "title": "Каталог", "met": True, "reason": "найдены"}]},
+        "explanation": {"why": ["<b>жирно</b>"], "check": "редакцию"},
+    }
+    analysis = Analysis.model_validate(analysis_args())
+    letter = DealLetter(
+        deal=deal,
+        platform="Портал поставщиков",
+        analysis=analysis,
+        items={501: catalog_item()},
+        findings=[],
+        kp_files=[],
+        docs_attached=[],
+        docs_not_attached=[],
+        card_url="https://stand.example/deals/1",
+    )
+    html = deal_html(letter, NOW)
+    assert "<script>" not in html and "&lt;script&gt;" in html and "&lt;b&gt;жирно" in html
+    assert "Стоит взять" in html and "Есть в каталоге" in html and "KL4863RAQFS" in html
+    assert 'href="https://stand.example/deals/1"' in html
+
+    msg = message_from_bytes(build_mime("a@x.ru", "b@x.ru", "Тема", "текст", [], html), policy=policy.default)
+    types = [p.get_content_type() for p in msg.walk()]
+    assert "text/plain" in types and "text/html" in types

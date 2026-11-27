@@ -36,7 +36,9 @@ class MailError(RuntimeError):
 
 
 class Mailer(Protocol):
-    def send(self, to: str, subject: str, text: str, attachments: list[Attachment]) -> str: ...
+    def send(
+        self, to: str, subject: str, text: str, attachments: list[Attachment], html: str | None = None
+    ) -> str: ...
 
 
 def _hmac(key: bytes, msg: str) -> bytes:
@@ -71,7 +73,9 @@ def sign_v4(body: bytes, key_id: str, secret: str, now: datetime) -> dict[str, s
     }
 
 
-def build_mime(sender: str, to: str, subject: str, text: str, attachments: list[Attachment]) -> bytes:
+def build_mime(
+    sender: str, to: str, subject: str, text: str, attachments: list[Attachment], html: str | None = None
+) -> bytes:
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = to
@@ -79,6 +83,8 @@ def build_mime(sender: str, to: str, subject: str, text: str, attachments: list[
     msg["Date"] = formatdate(localtime=False)
     msg["Message-ID"] = make_msgid(domain=sender.rsplit("@", 1)[-1])
     msg.set_content(text, charset="utf-8")
+    if html is not None:  # почтовик без HTML покажет текстовую версию
+        msg.add_alternative(html, subtype="html", charset="utf-8")
     for a in attachments:
         main, _, sub = a.mime.partition("/")
         msg.add_attachment(a.data, maintype=main, subtype=sub or "octet-stream", filename=a.name)
@@ -111,8 +117,10 @@ class PostboxMailer:
         resp.raise_for_status()
         return resp
 
-    def send(self, to: str, subject: str, text: str, attachments: list[Attachment]) -> str:
-        raw = build_mime(self._sender, to, subject, text, attachments)
+    def send(
+        self, to: str, subject: str, text: str, attachments: list[Attachment], html: str | None = None
+    ) -> str:
+        raw = build_mime(self._sender, to, subject, text, attachments, html)
         payload = {
             "FromEmailAddress": self._sender,
             "Destination": {"ToAddresses": [to]},
