@@ -149,7 +149,8 @@ def deal_html(letter: DealLetter, now: datetime) -> str:
         when = d.end_at.astimezone(MSK).strftime("%d.%m %H:%M")
         rest = "меньше часа" if hours is not None and hours < 1 else f"осталось {hours:.0f} ч"
         deadline, urgent = f"до {when} МСК, {rest}", hours is not None and hours < 24
-    pay = PAYMENT_RU.get(d.payment_terms, "не указана") + (f", {d.payment_days} дн." if d.payment_days else "")
+    days = f", {d.payment_days} дн." if d.payment_days else ""
+    pay = PAYMENT_RU.get(d.payment_terms, "не указана") + days
 
     parts: list[str] = [
         # Шапка: вывод, что покупают, полоса условий
