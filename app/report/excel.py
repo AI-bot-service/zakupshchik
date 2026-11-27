@@ -150,6 +150,7 @@ class Period:
     end: datetime | None
     include_open: bool
     title: str
+    deal_id: int | None = None  # отчёт по одной сделке — вложение к письму о ней
 
     def where(self, now: datetime) -> ColumnElement[bool]:
         parts: list[ColumnElement[bool]] = []
@@ -157,6 +158,8 @@ class Period:
             parts.append(Deal.created_at >= self.start)
         if self.end is not None:
             parts.append(Deal.created_at < self.end)
+        if self.deal_id is not None:
+            parts.append(Deal.id == self.deal_id)
         found = and_(true(), *parts)
         return or_(found, Deal.end_at > now) if self.include_open else found
 

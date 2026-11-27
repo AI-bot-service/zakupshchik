@@ -29,6 +29,7 @@ from app.db.models import (
 from app.notify.letters import rub, short_rub
 from app.pipeline.prefilter import PROCEDURE_RU
 from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU, STATUS_RU, TRI_RU, Period, worked_filter
+from app.scoring.score import catalog_met
 
 FILES_ROOT = Path("/app/data/files")
 WORKED = (DealStatus.HOT, DealStatus.ANALYZED, DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
@@ -73,6 +74,8 @@ def verdict(deal: Deal) -> Verdict:
         return Verdict.SKIP
     if deal.conditions_met is None:
         return Verdict.WAIT
+    if not catalog_met(deal.score_breakdown) and deal.conditions_met >= 3:
+        return Verdict.DECIDE  # позиции нет в каталоге — решает менеджер: искать у дистрибьютора или не идти
     if deal.status is DealStatus.HOT or deal.conditions_met == 5:
         return Verdict.TAKE
     return Verdict.DECIDE if deal.conditions_met >= 4 else Verdict.SKIP
@@ -130,6 +133,7 @@ class DealRow:
     procedure: str
     amount: str
     n: int | None
+    catalog: bool
     verdict: Verdict
     verdict_ru: str
     end_msk: str
@@ -177,6 +181,7 @@ def deal_rows(session: Session, view: View, now: datetime, period: Period | None
                 procedure=PROCEDURE_RU[d.procedure],
                 amount=short_rub(d.nmck),
                 n=d.conditions_met,
+                catalog=catalog_met(d.score_breakdown),
                 verdict=v,
                 verdict_ru=VERDICT_RU[v],
                 end_msk=msk(d.end_at),
@@ -397,6 +402,7 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
             procedure=PROCEDURE_RU[deal.procedure],
             amount=short_rub(deal.nmck),
             n=deal.conditions_met,
+            catalog=catalog_met(deal.score_breakdown),
             verdict=v,
             verdict_ru=VERDICT_RU[v],
             end_msk=msk(deal.end_at),

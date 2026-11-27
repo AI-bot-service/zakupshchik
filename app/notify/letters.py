@@ -14,6 +14,7 @@ from app.agent.schemas import Analysis
 from app.db.models import CatalogItem, Deal
 from app.pipeline.prefilter import PROCEDURE_RU
 from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU, TRI_RU
+from app.scoring.score import catalog_met
 
 
 def rub(value: Decimal | None) -> str:
@@ -52,7 +53,8 @@ class DealLetter:
 def deal_subject(deal: Deal, analysis: Analysis, now: datetime) -> str:
     end = deal.end_at.astimezone(MSK).strftime("%d.%m %H:%M") if deal.end_at else "срок не указан"
     subject = analysis.subject if len(analysis.subject) <= 60 else analysis.subject[:57] + "…"
-    return f"{deal.conditions_met} из 5 · {subject} · {short_rub(deal.nmck)} · подача до {end}"
+    mark = "" if catalog_met(deal.score_breakdown) else "нет в каталоге · "
+    return f"{mark}{deal.conditions_met} из 5 · {subject} · {short_rub(deal.nmck)} · подача до {end}"
 
 
 def deal_text(letter: DealLetter, now: datetime) -> str:
@@ -62,6 +64,15 @@ def deal_text(letter: DealLetter, now: datetime) -> str:
     out = [
         f"{d.conditions_met} из 5 — {a.subject}",
         "",
+        *(
+            []
+            if catalog_met(d.score_breakdown)
+            else [
+                "Нет в каталоге Софтлайна: решите, искать ли продукт у дистрибьютора или не идти. "
+                "КП робот не сформировал.",
+                "",
+            ]
+        ),
         f"Заказчик: {d.customer_name or 'не указан'}",
         f"Площадка: {letter.platform}, {PROCEDURE_RU[d.procedure]}",
         f"НМЦ: {rub(d.nmck)}",
@@ -97,6 +108,7 @@ def deal_text(letter: DealLetter, now: datetime) -> str:
     if expl.get("check"):
         out.append(f"Проверить: {expl['check']}")
     out += [""]
+    out.append("Разбор в Excel во вложении — та же строка, что в ежедневном отчёте.")
     if letter.kp_files:
         out.append("КП во вложении: " + ", ".join(letter.kp_files))
         out.append("Цены — по каталогу на сегодня, подтверждает менеджер. Подпись и печать — вручную.")

@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -55,6 +56,12 @@ class DealView:
     smb_only: TriState
     file_names: tuple[str, ...]
     guarantee_flag: bool
+
+
+def catalog_met(score_breakdown: dict[str, Any] | None) -> bool:
+    """Все позиции закупки нашлись в каталоге. Нет — сделку не отсеиваем, а помечаем для решения менеджера."""
+    conditions = ((score_breakdown or {}).get("score") or {}).get("conditions") or []
+    return any(c.get("key") == "catalog" and c.get("met") for c in conditions)
 
 
 @dataclass

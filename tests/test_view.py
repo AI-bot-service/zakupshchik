@@ -21,8 +21,9 @@ def test_urgent_only_within_a_day() -> None:
 
 
 def test_verdict_follows_conditions() -> None:
-    def deal(n: int | None, status: DealStatus = DealStatus.ANALYZED) -> Deal:
-        return Deal(conditions_met=n, status=status)
+    def deal(n: int | None, status: DealStatus = DealStatus.ANALYZED, catalog: bool = True) -> Deal:
+        conditions = [{"key": "catalog", "met": catalog, "title": "ПО из каталога", "reason": "-"}]
+        return Deal(conditions_met=n, status=status, score_breakdown={"score": {"conditions": conditions}})
 
     assert verdict(deal(5)) is Verdict.TAKE
     assert verdict(deal(4, DealStatus.HOT)) is Verdict.TAKE
@@ -30,3 +31,7 @@ def test_verdict_follows_conditions() -> None:
     assert verdict(deal(3)) is Verdict.SKIP
     assert verdict(deal(None)) is Verdict.WAIT
     assert verdict(deal(None, DealStatus.FILTERED_OUT)) is Verdict.SKIP
+    # Позиции нет в каталоге — решает менеджер, автоматически не отсеиваем
+    assert verdict(deal(4, catalog=False)) is Verdict.DECIDE
+    assert verdict(deal(3, catalog=False)) is Verdict.DECIDE
+    assert verdict(deal(2, catalog=False)) is Verdict.SKIP

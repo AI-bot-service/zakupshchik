@@ -39,7 +39,11 @@ def test_deal_letter() -> None:
     deal.payment_terms, deal.payment_days = PaymentTerms.POSTPAYMENT, 7
     deal.contract_format, deal.has_tz = ContractFormat.NONE, TriState.YES
     deal.score_breakdown = {
-        "score": {"conditions": [{"title": "Каталог", "met": True, "reason": "все позиции найдены"}]},
+        "score": {
+            "conditions": [
+                {"key": "catalog", "title": "Каталог", "met": True, "reason": "все позиции найдены"}
+            ]
+        },
         "explanation": {"why": ["предоплата не нужна"], "check": "редакцию"},
     }
     analysis = Analysis.model_validate(analysis_args())
@@ -58,6 +62,10 @@ def test_deal_letter() -> None:
     )
     text = deal_text(letter, NOW)
     assert "точно: KL4863RAQFS" in text and "2 100,00 ₽" in text
+    assert "Нет в каталоге" not in text and "Разбор в Excel во вложении" in text
+    deal.score_breakdown["score"]["conditions"][0]["met"] = False
+    assert deal_subject(deal, analysis, NOW).startswith("нет в каталоге · 5 из 5")
+    assert "Нет в каталоге Софтлайна" in deal_text(letter, NOW)
     assert "✔ Каталог: все позиции найдены" in text
     assert "Оплата: постоплата 7 дн." in text and "Риски:\n  • постоплата 7 дней" in text
     assert "КП во вложении: КП_x1.docx, КП_x1.pdf" in text and "подтверждает менеджер" in text
