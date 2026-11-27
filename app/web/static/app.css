@@ -325,6 +325,7 @@ code { font-size: var(--fs-sm); background: var(--c-sheet); padding: 1px var(--s
 .rules-form { display: grid; gap: var(--sp-4); }
 .rule-group { padding: var(--sp-4); display: grid; gap: var(--sp-4); }
 .rule-group > p { margin-top: calc(-1 * var(--sp-3)); }
+.cond-ref { margin: 0; padding-left: var(--sp-5); display: grid; gap: var(--sp-1); font-size: var(--fs-sm); line-height: var(--lh-base); }
 .rule { display: grid; gap: var(--sp-1); border: 0; margin: 0; padding: 0; min-width: 0; }
 .rule > label, .rule legend { font-weight: 700; padding: 0; }
 .rule .hint { font-size: var(--fs-sm); }

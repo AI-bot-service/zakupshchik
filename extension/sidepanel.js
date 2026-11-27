@@ -140,7 +140,7 @@ async function renderList() {
   }
   renderFoot(inbox);
   checked.textContent = "проверено " + new Date(inbox.checked_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-  nodes.push(h("h1", {}, "Идёт приём КП"));
+  nodes.push(h("h1", {}, "Жду новых предложений на площадках"));
   nodes.push(h("p", { class: "muted" }, `Уведомляем, когда выполнено ${inbox.notify_min} из 6 условий и больше. Откройте закупку на площадке — разбор появится здесь.`));
   if (!inbox.deals.length) {
     nodes.push(h("p", { class: "empty" }, "Открытых сделок сейчас нет. Робот проверяет площадки каждые несколько минут."));
@@ -289,7 +289,7 @@ function renderCard(card, flash) {
       h(
         "section",
         {},
-        h("h2", {}, "Пять условий"),
+        h("h2", {}, "Шесть условий"),
         h("ul", { class: "conditions" }, card.conditions.map((c) => h("li", { class: c.met ? "met" : "unmet" }, h("span", { class: "cond" }, c.met ? "да" : "нет"), h("span", {}, h("b", {}, c.title), " ", h("span", { class: "muted" }, c.reason))))),
       ),
     card.positions.length &&

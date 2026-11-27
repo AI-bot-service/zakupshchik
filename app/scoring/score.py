@@ -259,12 +259,13 @@ def evaluate(
         c1 = Condition(key="catalog", title="ПО из каталога", met=False, reason=why)
 
     limit = rules.profile.filters.max_nmck_rub
+    amount_title = f"НМЦ до {_rub(limit)}"
     if deal.nmck is None:
-        c2 = Condition(key="amount", title="НМЦ до 1 млн ₽", met=False, reason="НМЦ не указана — проверить")
+        c2 = Condition(key="amount", title=amount_title, met=False, reason="НМЦ не указана — проверить")
     else:
         c2 = Condition(
             key="amount",
-            title="НМЦ до 1 млн ₽",
+            title=amount_title,
             met=deal.nmck <= limit,
             reason=f"НМЦ {_rub(deal.nmck)}" + ("" if deal.nmck <= limit else f" > {_rub(limit)}"),
         )

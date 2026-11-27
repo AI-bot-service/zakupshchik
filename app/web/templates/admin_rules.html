@@ -41,6 +41,11 @@
     <section class="sheet rule-group">
       <h2>{{ g.title }}</h2>
       <p class="muted">{{ g.hint }}</p>
+      {% if g.items %}
+      <ol class="cond-ref">
+        {% for title, how in g.items %}<li><b>{{ title }}</b> <span class="muted">— {{ how }}</span></li>{% endfor %}
+      </ol>
+      {% endif %}
       {% for f in g.fields[:2] %}{{ field(f) }}{% endfor %}
       {% if g.procedures %}
       <fieldset class="rule{{ ' has-error' if error_field and error_field.startswith('filters__procedures') }}">
