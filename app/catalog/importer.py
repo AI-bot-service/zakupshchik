@@ -115,7 +115,7 @@ def main(argv: list[str]) -> int:
     from app.db.session import make_engine, make_session_factory
 
     path = Path(argv[0]) if argv else DEFAULT_PATH
-    factory = make_session_factory(make_engine(Settings().database_url.encoded_string()))
+    factory = make_session_factory(make_engine(Settings().database_url.get_secret_value().encoded_string()))
     with factory.begin() as session:
         count, errors = import_cards(session, path)
     print(f"каталог: загружено {count} позиций, ошибок разбора {len(errors)}")

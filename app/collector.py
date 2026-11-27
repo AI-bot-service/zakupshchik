@@ -145,7 +145,7 @@ def main(argv: list[str]) -> int:
 
     settings = Settings()  # значения из окружения
     configure_logging(settings.debug)
-    factory = make_session_factory(make_engine(settings.database_url.encoded_string()))
+    factory = make_session_factory(make_engine(settings.database_url.get_secret_value().encoded_string()))
     with factory.begin() as session:
         rules = active_rules(session)
     vendors = load_vendors(VENDORS_FILE)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field, PostgresDsn, SecretStr
+from pydantic import Field, PostgresDsn, Secret, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     app_secret_key: SecretStr = Field(min_length=32)
 
     # Рабочая роль без прав владельца: только DML. Миграции идут отдельным контейнером под DATABASE_OWNER_URL.
-    database_url: PostgresDsn
+    # Secret: адрес с паролем не попадает в repr настроек и трассировки ошибок
+    database_url: Secret[PostgresDsn]
 
     llm_base_url: str = "http://omniroute:20128/v1"
     llm_api_key: SecretStr = SecretStr("")

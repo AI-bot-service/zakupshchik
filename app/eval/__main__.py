@@ -189,7 +189,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rules", type=Path, help="файл правил вместо действующих в БД")
     args = parser.parse_args()
-    factory = make_session_factory(make_engine(str(Settings().database_url)))
+    factory = make_session_factory(make_engine(Settings().database_url.get_secret_value().encoded_string()))
     with factory() as session:
         rules = load_rules(args.rules) if args.rules else active_rules(session)
         print(report(collect(session, rules, load_labels()), rules))

@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from pydantic import PostgresDsn, SecretStr
+from pydantic import PostgresDsn, Secret, SecretStr
 
 from app.core.provenance import BUILD_HEADER, BUILD_MARK
 from app.core.settings import Settings
@@ -11,7 +11,7 @@ UNREACHABLE_DB = PostgresDsn("postgresql+psycopg://u:p@127.0.0.1:1/none")
 def make_client(password: str = "correct-horse") -> TestClient:
     settings = Settings(
         app_secret_key=SecretStr("x" * 32),
-        database_url=UNREACHABLE_DB,
+        database_url=Secret(UNREACHABLE_DB),
         debug=True,
         jury_login="jury",
         jury_password=SecretStr(password),
@@ -72,3 +72,8 @@ def test_wrong_password_rejected() -> None:
 def test_empty_configured_password_closes_login() -> None:
     r = make_client(password="").post("/login", data={"login": "jury", "password": ""})
     assert r.status_code in (401, 422)
+
+
+def test_settings_repr_hides_db_password() -> None:
+    settings = Settings(app_secret_key=SecretStr("x" * 32), database_url=Secret(UNREACHABLE_DB))
+    assert ":p@" not in repr(settings)

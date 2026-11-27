@@ -40,7 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/api/openapi.json" if settings.debug else None,
     )
     app.state.settings = settings
-    app.state.engine = make_engine(settings.database_url.encoded_string())
+    app.state.engine = make_engine(settings.database_url.get_secret_value().encoded_string())
     app.state.session_factory = make_session_factory(app.state.engine)
     templates = Jinja2Templates(directory=WEB_DIR / "templates")
     templates.env.globals["build_mark"] = BUILD_MARK

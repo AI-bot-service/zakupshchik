@@ -219,7 +219,7 @@ def main() -> None:
     configure_logging(settings.debug)
     # Опрос заявок раз в 10 с иначе засоряет журнал строками «Job executed successfully»; итоги пишем сами
     logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
-    factory = make_session_factory(make_engine(settings.database_url.encoded_string()))
+    factory = make_session_factory(make_engine(settings.database_url.get_secret_value().encoded_string()))
     interval = int(os.environ.get("COLLECT_INTERVAL_MIN", "5"))
     import_catalog(factory)
     scheduler = BlockingScheduler(timezone=UTC)
