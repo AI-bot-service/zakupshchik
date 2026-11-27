@@ -42,15 +42,18 @@ def collect(cfg: PlatformConfig, fetcher: Fetcher, now: datetime | None = None) 
     now = now or datetime.now(UTC)
     total = CollectResult()
     seen: set[str] = set()
-    for query in cfg.queries:
+    for i, query in enumerate(cfg.queries):
         try:
             part = parse(fetcher.get(cfg, query), cfg)
         except httpx.HTTPStatusError as exc:
             total.errors.append(f"«{query}»: площадка ответила {exc.response.status_code}")
             continue
         except httpx.TransportError as exc:
-            total.errors.append(f"«{query}»: нет соединения ({type(exc).__name__})")
-            continue
+            # Площадка недоступна (сеть, блок по IP): после повторов не ждём таймаутов на остальных словах
+            rest = len(cfg.queries) - i - 1
+            note = f", ещё {rest} запр. отложено до следующего цикла" if rest else ""
+            total.errors.append(f"«{query}»: нет соединения ({type(exc).__name__}){note}")
+            break
         except ExtractError as exc:
             total.errors.append(f"«{query}»: {exc}")
             continue

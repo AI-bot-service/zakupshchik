@@ -370,3 +370,10 @@ code { font-size: var(--fs-sm); background: var(--c-sheet); padding: 1px var(--s
 .btn-small { min-height: 36px; padding: 0 var(--sp-3); font-size: var(--fs-sm); }
 .tag-status { white-space: nowrap; }
 @media (max-width: 640px) { .export { width: 100%; } .export input { flex: 1 1 130px; } }
+
+.copy-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-2) 0; }
+.chain .hint { display: block; margin-bottom: var(--sp-2); font-size: var(--fs-sm); }
+.copy-field { display: flex; gap: var(--sp-2); min-width: 0; }
+.copy-field input { flex: 1 1 0; width: auto; min-width: 0; font-family: ui-monospace, monospace; }
+.copy-field .btn { flex: none; min-width: 9.5em; }
+.btn.is-copied { background: var(--c-ok-soft); color: var(--c-ok); border-color: transparent; }

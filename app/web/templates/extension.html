@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Плагин · Закупщик{% endblock %}
+{% block head %}<script src="/static/copy.js" defer></script>{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -11,7 +12,10 @@
 <div class="ext-grid">
   <ol class="chain">
     <li><span><b>Скачайте и распакуйте архив</b> <a href="/extension.zip">zakupshchik-extension.zip</a>. Адрес стенда в нём уже прописан.</span></li>
-    <li><span><b>Установите.</b> Откройте <code>chrome://extensions</code>, включите «Режим разработчика», нажмите «Загрузить распакованное» и выберите папку.</span></li>
+    <li><span><b>Установите.</b> Откройте страницу расширений:
+      <span class="copy-line"><code>chrome://extensions</code><button class="btn btn-quiet btn-small" type="button" data-copy="chrome://extensions">Скопировать</button></span>
+      <span class="muted hint">Chrome не открывает этот адрес по ссылке — вставьте его в адресную строку. В Яндекс Браузере: <code>browser://extensions</code>.</span>
+      Включите «Режим разработчика», нажмите «Загрузить распакованное» и выберите папку.</span></li>
     <li><span><b>Вставьте ключ.</b> Нажмите на значок «Закупщик» — откроется боковая панель — и вставьте ключ, выпущенный справа.</span></li>
     <li><span><b>Откройте закупку на площадке.</b> Если робот её разобрал, разбор появится в панели. О сделках от {{ notify_min }} из 5 приходит уведомление, число на значке — сколько их сейчас.</span></li>
   </ol>
@@ -22,7 +26,10 @@
     <p>Скопируйте ключ сейчас: стенд хранит только его отпечаток и показать его ещё раз не сможет.</p>
     <div class="field">
       <label for="ext-key">Ваш ключ</label>
-      <input id="ext-key" value="{{ key }}" readonly autofocus>
+      <span class="copy-field">
+        <input id="ext-key" value="{{ key }}" readonly autofocus spellcheck="false">
+        <button class="btn btn-primary btn-small" type="button" data-copy-from="ext-key">Скопировать</button>
+      </span>
     </div>
     <p class="muted">Старый ключ, если был, больше не работает.</p>
     {% else %}

@@ -73,7 +73,7 @@ CREATE DATABASE zakupshchik OWNER zakupshchik_owner;
 Ночная копия БД — `scripts/backup_db.sh` (cron, восстановление описано в файле).
 
 Проверки кода в том же образе: `docker build --target test -t zakupshchik-test . && docker run --rm zakupshchik-test`
-(ruff, mypy --strict, pytest — 95 тестов).
+(ruff, mypy --strict, pytest — 96 тестов).
 
 ## Модели
 

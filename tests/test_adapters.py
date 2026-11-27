@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.adapters import parse
+from app.adapters import collect, parse
 from app.adapters.config import PlatformConfig, load_platforms
 from app.adapters.details import details_url, parse_details
 from app.adapters.extract import ExtractError
@@ -152,6 +152,21 @@ def test_flaky_status_is_retried_only_where_configured(monkeypatch: pytest.Monke
     with pytest.raises(httpx.HTTPStatusError):
         f.get_url(CONFIGS["tektorg_market"], CONFIGS["tektorg_market"].url)
     assert seen == [400]
+
+
+def test_unreachable_platform_stops_after_first_query() -> None:
+    cfg = CONFIGS["mos_portal"]
+    calls: list[str] = []
+
+    class Down:
+        def get(self, _: PlatformConfig, query: str) -> str:
+            calls.append(query)
+            raise httpx.ConnectTimeout("timeout")
+
+    result = collect(cfg, Down())  # type: ignore[arg-type]
+    assert calls == cfg.queries[:1]
+    assert len(result.errors) == 1
+    assert f"ещё {len(cfg.queries) - 1} запр." in result.errors[0]
 
 
 def test_platform_codes_unique_and_https() -> None:
