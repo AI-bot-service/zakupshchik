@@ -80,15 +80,25 @@ def run_cycle(
                 AgentStep(
                     run_id=run_id,
                     step="collect",
-                    output={"platform": cfg.code, "found": run.found, "new": run.new,
-                            "updated": run.updated, "skipped": run.skipped, "closed": run.closed,
-                            "errors": run.errors},
+                    output={
+                        "platform": cfg.code,
+                        "found": run.found,
+                        "new": run.new,
+                        "updated": run.updated,
+                        "skipped": run.skipped,
+                        "closed": run.closed,
+                        "errors": run.errors,
+                    },
                     ms=run.ms,
                     error=None if result.ok else {"code": "platform_unavailable", "message_ru": error},
                 )
             )
-        log.info("collect", run_id=run_id, **{k: v for k, v in run.__dict__.items() if k != "errors"},
-                 errors=len(run.errors))
+        log.info(
+            "collect",
+            run_id=run_id,
+            **{k: v for k, v in run.__dict__.items() if k != "errors"},
+            errors=len(run.errors),
+        )
         runs.append(run)
     stats = _prefilter_step(session_factory, run_id, rules, vendors)
     started = time.monotonic()
@@ -140,12 +150,16 @@ def main(argv: list[str]) -> int:
         platforms = load_platforms(PLATFORMS_FILE)
         runs, stats = run_cycle(factory, fetcher, platforms, rules, vendors, set(argv) or None)
     for r in runs:
-        print(f"{r.code}: найдено {r.found}, новых {r.new}, обновлено {r.updated}, "
-              f"закрытых {r.closed}, не разобрано {r.skipped}, ошибок {len(r.errors)}")
+        print(
+            f"{r.code}: найдено {r.found}, новых {r.new}, обновлено {r.updated}, "
+            f"закрытых {r.closed}, не разобрано {r.skipped}, ошибок {len(r.errors)}"
+        )
         for e in r.errors:
             print(f"  ! {e}")
-    print(f"префильтр (правила {rules.version}): прошли {stats['passed']}, "
-          f"отсеяно {stats['filtered_out']}, истекли {stats['expired']}")
+    print(
+        f"префильтр (правила {rules.version}): прошли {stats['passed']}, "
+        f"отсеяно {stats['filtered_out']}, истекли {stats['expired']}"
+    )
     return 0 if all(r.found or not r.errors for r in runs) else 1
 
 

@@ -156,6 +156,8 @@ def test_details_never_copy_contacts() -> None:
 def test_details_url_from_deal_fields() -> None:
     spec = CONFIGS["mos_portal"].details
     assert spec is not None
-    assert details_url(spec, {"needId": 6322826}) == "https://zakupki.mos.ru/newapi/api/Need/Get?needId=6322826"
+    assert (
+        details_url(spec, {"needId": 6322826}) == "https://zakupki.mos.ru/newapi/api/Need/Get?needId=6322826"
+    )
     assert details_url(spec, {"auctionId": 10355601}).endswith("auctionId=10355601")  # type: ignore[union-attr]
     assert details_url(spec, {}) is None

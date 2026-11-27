@@ -44,7 +44,24 @@ def test_login_ok_then_home() -> None:
     client = make_client()
     r = client.post("/login", data={"login": "jury", "password": "correct-horse"}, follow_redirects=False)
     assert r.status_code == 303
-    assert client.get("/").status_code == 200
+    home = client.get("/", follow_redirects=False)
+    assert home.status_code == 303
+    assert home.headers["location"] == "/deals"
+
+
+def test_deals_and_files_require_login() -> None:
+    client = make_client()
+    for url in ("/deals", "/deals/1", "/deals/1/files/kp0", "/deals.xlsx"):
+        r = client.get(url, follow_redirects=False)
+        assert r.status_code == 303, url
+        assert r.headers["location"] == "/login"
+
+
+def test_status_change_rejects_missing_csrf() -> None:
+    client = make_client()
+    client.post("/login", data={"login": "jury", "password": "correct-horse"}, follow_redirects=False)
+    r = client.post("/deals/1/status", data={"action": "taken", "csrf": "forged"})
+    assert r.status_code == 403
 
 
 def test_wrong_password_rejected() -> None:

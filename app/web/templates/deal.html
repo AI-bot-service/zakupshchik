@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% set r = card.row %}
+{% block title %}{{ r.subject[:60] }} · Закупщик{% endblock %}
+{% block content %}
+<a class="back" href="/deals">Все сделки</a>
+
+<header class="card-head">
+  <div class="stamp stamp-{{ r.verdict.value }}" role="status">
+    <span class="stamp-main">{{ r.verdict_ru }}</span>
+    <span class="stamp-date">{% if r.n is not none %}{{ r.n }} из 5 условий{% else %}{{ r.status_ru }}{% endif %}</span>
+  </div>
+  <div class="card-title">
+    <h1>{{ r.subject }}</h1>
+    <p class="muted">{{ r.customer }}</p>
+  </div>
+</header>
+
+<dl class="facts">
+  <div><dt>Максимальная цена закупки</dt><dd>{{ card.nmck }}</dd></div>
+  {% if card.catalog_total %}<div><dt>По ценам каталога</dt><dd>{{ card.catalog_total }}</dd></div>
+  {% elif card.conditions %}<div><dt>По ценам каталога</dt><dd class="is-empty">цены нет — ставит менеджер</dd></div>
+  {% else %}<div><dt>По ценам каталога</dt><dd class="muted">не сравнивали: сделка не дошла до разбора</dd></div>{% endif %}
+  <div><dt>Приём КП до</dt><dd>{{ r.end_msk }} МСК <span class="{{ 'is-urgent' if r.urgent else 'muted' }}">{{ r.left }}</span></dd></div>
+  <div><dt>Где и как</dt><dd>{{ r.platform }}, {{ r.procedure }}</dd></div>
+</dl>
+
+{% if request.query_params.get('saved') %}<p class="saved" role="status">Статус сохранён: {{ r.status_ru }}.</p>{% endif %}
+
+{% if card.why or card.check or card.not_license_reason or r.reason %}
+<section class="block card-why">
+  <h2>Почему так</h2>
+  <ul class="why">
+    {% if r.reason and r.status.value == 'filtered_out' %}<li>{{ r.reason }}</li>{% endif %}
+    {% if card.not_license_reason %}<li>Это не поставка лицензий: {{ card.not_license_reason }}</li>{% endif %}
+    {% for w in card.why %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+  {% if card.check %}<p class="check"><b>Проверить:</b> {{ card.check }}</p>{% endif %}
+</section>
+{% endif %}
+
+<div class="card-grid">
+  <div class="card-body">
+    {% if card.conditions %}
+    <section class="block">
+      <h2>Пять условий</h2>
+      <ul class="conditions">
+        {% for c in card.conditions %}
+        <li class="{{ 'is-met' if c.met else 'is-unmet' }}">
+          <span class="cond-mark">{{ 'да' if c.met else 'нет' }}</span>
+          <span><b>{{ c.title }}</b> <span class="muted">{{ c.reason }}</span></span>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if card.positions %}
+    <section class="block">
+      <h2>Что покупают и что есть в каталоге</h2>
+      <ol class="positions">
+        {% for p in card.positions %}
+        <li>
+          <div class="pos-head">
+            <b>{{ p.name }}</b>
+            <span class="muted">{{ p.qty }}</span>
+          </div>
+          <div class="pos-match pos-{{ p.match_kind.value }}">
+            <span class="tag">{{ p.match }}</span>
+            {% if p.sku %}
+            <a href="{{ p.catalog_url }}" target="_blank" rel="noopener noreferrer">{{ p.catalog_name }}</a>
+            <span class="muted">артикул {{ p.sku }}</span>
+            <span class="{{ 'price' if p.price else 'price is-empty' }}">{{ p.price or 'нет цены' }}</span>
+            {% endif %}
+          </div>
+          <p class="muted">{{ p.reason }} Уверенность {{ p.confidence }}%.</p>
+          <details><summary>Как сказано в закупке</summary><blockquote>{{ p.quote }}</blockquote></details>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+
+    {% if card.findings or card.missing %}
+    <section class="block">
+      <h2>Риски и чего не хватает</h2>
+      <ul class="why">
+        {% for f in card.findings %}<li>{{ f }}</li>{% endfor %}
+        {% for m in card.missing %}<li>{{ m }}</li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <section class="block">
+      <h2>Условия закупки</h2>
+      <dl class="terms">
+        <dt>Оплата</dt><dd>{{ card.payment }}</dd>
+        <dt>Договор</dt><dd>{{ card.contract }}</dd>
+        <dt>ТЗ во вложении</dt><dd>{{ card.has_tz }}</dd>
+        <dt>Только для малого бизнеса</dt><dd>{{ card.smb_only }}</dd>
+        {% if card.min_kp_days %}<dt>КП должно действовать</dt><dd>не меньше {{ card.min_kp_days }} дн.</dd>{% endif %}
+      </dl>
+    </section>
+
+    {% if card.priority %}
+    <details class="block fold">
+      <summary><h2>Как посчитан приоритет{% if card.score is not none %}: {{ '%.2f' | format(card.score) }}{% endif %}</h2></summary>
+      <ul class="bars">
+        {% for name, value, weight in card.priority %}
+        <li>
+          <span>{{ name }} <span class="muted">вес {{ '%g' | format(weight) }}</span></span>
+          <span class="bar" style="--v: {{ (value * 100) | round(0) }}%"><span></span></span>
+          <span>{{ '%.2f' | format(value) }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="muted">Версия правил {{ card.rules_version }}, файл config/rules.yaml.</p>
+    </details>
+    {% endif %}
+
+    {% if card.steps %}
+    <details class="block fold">
+      <summary><h2>Журнал робота: {{ card.steps | length }} шагов, {{ card.agent_cost }}</h2></summary>
+      <div class="table-wrap">
+        <table class="journal">
+          <thead><tr><th>Время</th><th>Шаг</th><th>Модель</th><th>Токены</th><th>Цена</th><th>мс</th></tr></thead>
+          <tbody>
+            {% for s in card.steps %}
+            <tr class="{{ 'is-error' if s.error }}">
+              <td>{{ s.at }}</td>
+              <td>{{ s.step }}{% if s.note %}<br><span class="muted">{{ s.note }}</span>{% endif %}</td>
+              <td>{{ s.model or '' }}</td>
+              <td>{{ s.tokens or '' }}</td>
+              <td>{{ s.cost }}</td>
+              <td>{{ s.ms }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+
+  <aside class="card-side">
+    <section class="sheet side-block">
+      <h2>Ваше решение</h2>
+      <p class="muted">Сейчас: {{ r.status_ru }}. Робот заявку не подаёт и КП заказчику не отправляет.</p>
+      <form method="post" action="/deals/{{ r.id }}/status" class="decide">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn btn-primary" name="action" value="taken" type="submit">Беру в работу</button>
+        <button class="btn btn-quiet" name="action" value="submitted" type="submit">КП подано</button>
+      </form>
+      <details class="skip">
+        <summary>Не беру</summary>
+        <form method="post" action="/deals/{{ r.id }}/status">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="action" value="skipped">
+          <div class="field">
+            <label for="reason">Почему</label>
+            <input id="reason" name="reason" required maxlength="500" placeholder="Например: нет партнёрства с вендором">
+          </div>
+          <button class="btn btn-quiet" type="submit">Отметить «не беру»</button>
+        </form>
+      </details>
+      {% if card.history %}
+      <ul class="history">
+        {% for at, what, why in card.history %}<li><span class="muted">{{ at }}</span> {{ what }}{% if why %}: {{ why }}{% endif %}</li>{% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+
+    <section class="sheet side-block">
+      <h2>Коммерческое предложение</h2>
+      {% if card.kp_files %}
+      <ul class="files">
+        {% for f in card.kp_files %}<li><a href="/deals/{{ r.id }}/files/{{ f.id }}">{{ f.name }}</a> <span class="muted">{{ f.size_kb }} КБ</span></li>{% endfor %}
+      </ul>
+      <p class="muted">Цены по каталогу на сегодня, подтверждает менеджер. Подпись и печать ставятся вручную.</p>
+      {% else %}
+      <p>КП не собрано.</p>
+      {% if card.kp_blockers %}<ul class="why">{% for b in card.kp_blockers %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
+      {% endif %}
+    </section>
+
+    <section class="sheet side-block">
+      <h2>Документы закупки</h2>
+      {% if card.docs %}
+      <ul class="files">
+        {% for f in card.docs %}
+        <li>
+          {% if f.local %}<a href="/deals/{{ r.id }}/files/{{ f.id }}">{{ f.name }}</a> <span class="muted">{{ f.size_kb }} КБ</span>
+          {% else %}{{ f.name }} <span class="muted">на площадке</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">Площадка не дала вложений без входа.</p>{% endif %}
+      <a class="btn btn-quiet" href="{{ card.url }}" target="_blank" rel="noopener noreferrer">Открыть закупку на площадке</a>
+    </section>
+  </aside>
+</div>
+{% endblock %}

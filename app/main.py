@@ -8,12 +8,12 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api import auth, status
+from app.api import auth, deals, status
 from app.core.logging import configure_logging
 from app.core.provenance import BUILD_HEADER, BUILD_MARK
 from app.core.settings import Settings
@@ -65,9 +65,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
     app.include_router(status.router)
     app.include_router(auth.router)
+    app.include_router(deals.router)
 
-    @app.get("/", response_class=HTMLResponse)
-    def home(request: Request, user: Annotated[str, Depends(auth.require_user)]) -> HTMLResponse:
-        return templates.TemplateResponse(request, "home.html", {"user": user})
+    @app.get("/")
+    def home(user: Annotated[str, Depends(auth.require_user)]) -> RedirectResponse:
+        return RedirectResponse("/deals", status_code=303)
 
     return app

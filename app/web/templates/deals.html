@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Сделки · Закупщик{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Сделки</h1>
+    <p class="muted">Сверху — где выполнено больше условий из пяти, внутри — у кого раньше заканчивается приём КП.</p>
+  </div>
+  <form class="export" method="get" action="/deals.xlsx">
+    <label for="since">Excel с даты</label>
+    <input id="since" name="since" type="date" value="{{ week_ago }}" max="{{ today }}">
+    <button class="btn btn-quiet" type="submit">Скачать Excel</button>
+  </form>
+</div>
+
+<nav class="tabs" aria-label="Какие сделки показать">
+  {% for key, title in views.items() %}
+  <a href="/deals?view={{ key.value }}" {% if key == view %}aria-current="page"{% endif %}>{{ title }} <span>{{ counts[key] }}</span></a>
+  {% endfor %}
+</nav>
+
+{% if rows %}
+<ol class="deals">
+  {% for r in rows %}
+  <li>
+    <a class="deal deal-{{ r.verdict.value }}" href="/deals/{{ r.id }}">
+      <span class="mark" aria-label="{{ r.verdict_ru }}">
+        {% if r.n is not none %}<b>{{ r.n }}</b><small>из 5</small>{% else %}<small>{{ 'отсеяна' if r.status.value == 'filtered_out' else 'разбор' }}</small>{% endif %}
+      </span>
+      <span class="deal-main">
+        <span class="deal-title">{{ r.subject }}</span>
+        <span class="deal-meta">{{ r.customer }}</span>
+        <span class="deal-meta">{{ r.platform }}, {{ r.procedure }}</span>
+        {% if r.reason and r.status.value == 'filtered_out' %}<span class="deal-reason">{{ r.reason }}</span>{% endif %}
+      </span>
+      <span class="deal-side">
+        <span class="deal-amount">{{ r.amount }}</span>
+        <span class="deal-left {{ 'is-urgent' if r.urgent }}">{{ r.left }}</span>
+        <span class="deal-tags">
+          <span class="tag tag-{{ r.verdict.value }}">{{ r.verdict_ru }}</span>
+          {% if r.status.value in ('taken', 'submitted', 'skipped') %}<span class="tag tag-status">{{ r.status_ru }}</span>{% endif %}
+          {% if r.has_kp %}<span class="tag tag-kp">КП готово</span>{% endif %}
+        </span>
+      </span>
+    </a>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<section class="sheet empty">
+  {% if view.value == 'open' %}
+  <h2>Открытых сделок сейчас нет</h2>
+  <p>Робот проверяет площадки каждые несколько минут. Прошлые разобранные сделки — во вкладке <a href="/deals?view=all">«Все разобранные»</a>, а почему отсеяны остальные — в <a href="/deals?view=excluded">«Отсеянных»</a>.</p>
+  {% else %}
+  <h2>Здесь пока пусто</h2>
+  <p>Откройте вкладку <a href="/deals?view=all">«Все разобранные»</a>.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
