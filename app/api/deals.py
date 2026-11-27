@@ -11,6 +11,7 @@ from typing import Annotated, Any
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.api.auth import require_user
@@ -19,7 +20,7 @@ from app.db.session import get_session
 from app.pipeline.proposals import KP_MAX_BYTES, KP_SUFFIXES, attach_manager_kp, latest_proposal, request_kp
 from app.pipeline.status_log import Who, change_status
 from app.report.excel import ALL_TIME, build_report, day_period
-from app.report.stamps import MSK
+from app.report.stamps import MSK, STAMP_RU, Stamp
 from app.scoring.rules import RulesError
 from app.scoring.store import active_rules
 from app.web.view import (
@@ -30,6 +31,8 @@ from app.web.view import (
     deal_card,
     deal_rows,
     file_path,
+    only_stamps,
+    stamp_counts,
     view_counts,
     view_filter,
 )
@@ -161,11 +164,14 @@ def deals_page(
     view: View = View.OPEN,
     first: Annotated[str | None, Query(alias="from", max_length=10)] = None,
     last: Annotated[str | None, Query(alias="to", max_length=10)] = None,
+    stamp: Annotated[list[Stamp] | None, Query(max_length=len(Stamp))] = None,
 ) -> HTMLResponse:
     now = datetime.now(UTC)
     today = now.astimezone(MSK).date()
     span = _period(view, first, last, today)
     period = day_period(*span) if span else None
+    rows = deal_rows(session, view, now, period)
+    chosen = frozenset(stamp or ())
     return request.app.state.templates.TemplateResponse(  # type: ignore[no-any-return]
         request,
         "deals.html",
@@ -174,7 +180,10 @@ def deals_page(
             "view": view,
             "views": VIEW_RU,
             "counts": view_counts(session, now, period),
-            "rows": deal_rows(session, view, now, period),
+            "rows": only_stamps(rows, chosen),
+            "stamps": stamp_counts(rows),
+            "stamp_ru": STAMP_RU,
+            "chosen": chosen,
             "today": today.isoformat(),
             "first": span[0].isoformat() if span else "",
             "last": span[1].isoformat() if span else "",
@@ -265,8 +274,9 @@ def export(
     view: View = View.ARCHIVE,
     first: Annotated[str | None, Query(alias="from", max_length=10)] = None,
     last: Annotated[str | None, Query(alias="to", max_length=10)] = None,
+    stamp: Annotated[list[Stamp] | None, Query(max_length=len(Stamp))] = None,
 ) -> Response:
-    """Excel ровно того, что на экране: та же вкладка и тот же период по дате размещения."""
+    """Excel ровно того, что на экране: та же вкладка, период по дате размещения и отмеченные штампы."""
     now = datetime.now(UTC)
     span = _period(view, first, last, now.astimezone(MSK).date())
     try:
@@ -275,8 +285,15 @@ def export(
     except (RulesError, ValueError, OSError) as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Правила не читаются") from exc
     period = day_period(*span) if span else ALL_TIME
-    period = replace(period, title=f"вкладка «{VIEW_RU[view]}», {period.title}")
-    data, _ = build_report(session, rules, now, period, view_filter(view, now))
+    title = f"вкладка «{VIEW_RU[view]}», {period.title}"
+    only = view_filter(view, now)
+    if stamp:
+        chosen = frozenset(stamp)
+        rows = deal_rows(session, view, now, day_period(*span) if span else None)
+        ids = [r.id for r in only_stamps(rows, chosen)]
+        only = and_(only, Deal.id.in_(ids))
+        title += ", штампы: " + ", ".join(STAMP_RU[s] for s in STAMP_RU if s in chosen)
+    data, _ = build_report(session, rules, now, replace(period, title=title), only)
     if span is None:
         dates = f"{now.astimezone(MSK):%Y-%m-%d}"
     elif span[0] == span[1]:

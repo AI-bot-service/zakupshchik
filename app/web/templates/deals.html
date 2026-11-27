@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Сделки · Закупщик{% endblock %}
+{% block head %}<script src="/static/filter.js" defer></script>{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
     <h1>Сделки</h1>
-    <p class="muted">{% if view.value == 'archive' %}Все сделки, размещённые на площадках с {{ first | dmy }} по {{ last | dmy }}, с их статусами сейчас. История не удаляется.{% else %}Сверху — где выполнено больше условий из шести, внутри — у кого раньше заканчивается приём КП.{% if first %} Только размещённые с {{ first | dmy }} по {{ last | dmy }}.{% endif %}{% endif %}</p>
+    <p class="muted">{% if view.value == 'archive' %}Все сделки, размещённые на площадках с {{ first | dmy }} по {{ last | dmy }}, с их статусами сейчас. История не удаляется.{% elif first %}Только размещённые с {{ first | dmy }} по {{ last | dmy }}.{% endif %}</p>
   </div>
-  <form class="export" method="get" action="/deals" aria-label="Период по дате размещения">
+  <form class="export" id="deals-filter" method="get" action="/deals" aria-label="Период по дате размещения">
     <input type="hidden" name="view" value="{{ view.value }}">
     <label for="from">Размещены с</label>
     <input id="from" name="from" type="date" value="{{ first }}" max="{{ today }}">
@@ -23,6 +24,19 @@
   <a href="/deals?view={{ key.value }}{% if first %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}" {% if key == view %}aria-current="page"{% endif %}>{{ title }} <span>{{ counts[key] }}</span></a>
   {% endfor %}
 </nav>
+
+{% if stamps %}
+<fieldset class="stamp-filter">
+  <legend>Штамп</legend>
+  {% for s, n in stamps.items() %}
+  <label class="stamp stamp-mini stamp-{{ s.value }}">
+    <input type="checkbox" name="stamp" value="{{ s.value }}" form="deals-filter" {% if not chosen or s in chosen %}checked{% endif %} data-autosubmit>
+    {{ stamp_ru[s] }} <span>{{ n }}</span>
+  </label>
+  {% endfor %}
+  {% if chosen %}<a href="/deals?view={{ view.value }}{% if first %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}">Все штампы</a>{% endif %}
+</fieldset>
+{% endif %}
 
 {% if rows %}
 <ol class="deals">
@@ -52,11 +66,14 @@
 </ol>
 {% else %}
 <section class="panel empty">
-  {% if period_dates and view.value != 'archive' %}
+  {% if chosen %}
+  <h2>Нет сделок с отмеченными штампами</h2>
+  <p>Отметьте другие штампы выше или <a href="/deals?view={{ view.value }}{% if first %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}">покажите все</a>.</p>
+  {% elif period_dates and view.value != 'archive' %}
   <h2>На этой вкладке нет сделок, размещённых {{ period_dates }}</h2>
   <p>Выберите другой период выше или <a href="/deals?view={{ view.value }}">сбросьте даты</a>.</p>
   {% elif view.value == 'open' %}
-  <h2>Открытых сделок сейчас нет</h2>
+  <h2>Активных сделок сейчас нет</h2>
   <p>Робот проверяет площадки каждые несколько минут. Прошлые разобранные сделки — во вкладке <a href="/deals?view=all">«Все разобранные»</a>, а почему отсеяны остальные — в <a href="/deals?view=excluded">«Отсеянных»</a>.</p>
   {% elif view.value == 'archive' %}
   <h2>Нет сделок, размещённых {{ period_dates }}</h2>

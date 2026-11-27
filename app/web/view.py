@@ -67,7 +67,7 @@ class View(StrEnum):
 
 
 VIEW_RU = {
-    View.OPEN: "Идёт приём КП",
+    View.OPEN: "Активные",
     View.TODAY: "Найдены сегодня",
     View.ALL: "Все разобранные",
     View.EXCLUDED: "Отсеянные",
@@ -171,6 +171,17 @@ def deal_rows(session: Session, view: View, now: datetime, period: Period | None
         )
         for d in deals
     ]
+
+
+def only_stamps(rows: list[DealRow], stamps: frozenset[Stamp]) -> list[DealRow]:
+    """Фильтр по штампам: пусто — все строки."""
+    return [r for r in rows if r.stamp in stamps] if stamps else rows
+
+
+def stamp_counts(rows: list[DealRow]) -> dict[Stamp, int]:
+    """Штампы, которые есть на вкладке, в порядке STAMP_RU — для чекбоксов фильтра."""
+    found = {r.stamp for r in rows}
+    return {s: sum(r.stamp is s for r in rows) for s in STAMP_RU if s in found}
 
 
 def plural(n: int, forms: tuple[str, str, str]) -> str:

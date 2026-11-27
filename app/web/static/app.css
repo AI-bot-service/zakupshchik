@@ -177,6 +177,13 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
 .tabs a:hover { color: var(--c-ink); }
 .tabs a[aria-current="page"] { color: var(--c-stamp); box-shadow: inset 0 -2px 0 var(--c-stamp); }
 
+.stamp-filter { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin: 0 0 var(--sp-4); padding: 0; border: 0; font-size: var(--fs-sm); }
+.stamp-filter legend { float: left; margin-right: var(--sp-2); font-weight: 600; color: var(--c-ink-muted); }
+.stamp-filter .stamp { display: inline-flex; align-items: center; gap: var(--sp-1); cursor: pointer; animation: none; transform: none; }
+.stamp-filter .stamp span { font-weight: 500; opacity: 0.75; }
+.stamp-filter .stamp:has(input:not(:checked)) { opacity: 0.45; }
+.stamp-filter input { margin: 0; accent-color: var(--c-stamp); }
+
 .deals { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
 .deal {
   display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: var(--sp-4); align-items: center;
