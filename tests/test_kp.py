@@ -1,6 +1,7 @@
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from docx import Document
 
@@ -19,7 +20,7 @@ def score(*findings: FindingOut) -> ScoreResult:
     return ScoreResult([], list(findings), {}, 0.0, None, False)
 
 
-def analysis(**kw: object) -> Analysis:
+def analysis(**kw: Any) -> Analysis:
     return Analysis.model_validate(analysis_args(**kw))
 
 

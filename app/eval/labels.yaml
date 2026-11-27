@@ -1,0 +1,98 @@
+# Ручная разметка закупок для проверки качества (ARCHITECTURE.md §13). Ключ — площадка:номер, не id в БД.
+# ours: true — Софтлайн стоит взять (ПО вендора из каталога или того же класса, НМЦ ≤ 1 млн ₽, не конкурс);
+#       false — не наша (услуги, оборудование, чужой продукт, нарушает правила заказчицы); null — нельзя решить по данным.
+# match: что агент должен найти в каталоге по главной позиции (exact — тот же SKU, analog — та же линейка, none — нет).
+# Разметка 27.11.2026 по заголовку, позициям и вложениям; эталон не подгонялся под ответы робота.
+
+mos_portal:Need6322887:   {ours: false, why: "абонентское обслуживание ПО навигации — услуга"}
+mos_portal:Need6322826:   {ours: false, why: "Контур.Экстерн — не наш вендор"}
+mos_portal:Auction10355601: {ours: true, match: analog, why: "продление Dr.Web DSS на 20 ПК: вендор в каталоге, SKU продления нет — годится лицензия той же линейки"}
+mos_portal:Auction10355605: {ours: false, why: "оргтехника, НМЦ 1,18 млн ₽ больше порога"}
+mos_portal:Need6322767:   {ours: false, why: "сопровождение КонсультантПлюс"}
+mos_portal:Need6322736:   {ours: false, why: "обслуживание оборудования ГЛОНАСС"}
+mos_portal:Need6322692:   {ours: true, match: exact, why: "РЕД ОС 28 лицензий"}
+mos_portal:Need6322681:   {ours: false, why: "СБИС — не наш вендор"}
+mos_portal:Need6322573:   {ours: false, why: "Контур.Экстерн — не наш вендор"}
+mos_portal:Need6322461:   {ours: false, match: none, why: "Контур.Диадок — не наш вендор"}
+mos_portal:Need6322470:   {ours: null, why: "49 лицензий «по спецификации», спецификация не приложена"}
+mos_portal:Auction10355487: {ours: false, why: "техподдержка ViPNet — вендора нет в каталоге"}
+mos_portal:Auction10355456: {ours: false, why: "кабели и инструмент"}
+mos_portal:Need6322396:   {ours: false, why: "обслуживание тренажёров"}
+mos_portal:Auction10355449: {ours: false, why: "принтер и картриджи"}
+mos_portal:Auction10355437: {ours: false, why: "моноблоки"}
+mos_portal:Auction10355431: {ours: false, why: "патч-корды"}
+mos_portal:Auction10355354: {ours: false, why: "точки доступа и диски"}
+mos_portal:Need6322130:   {ours: true, match: exact, why: "продление Kaspersky Endpoint Security"}
+mos_portal:Auction10355292: {ours: false, why: "гарнитуры и рации"}
+mos_portal:Need6322119:   {ours: false, why: "абонентское обслуживание ПО навигации"}
+mos_portal:Auction10355249: {ours: false, why: "оперативная память"}
+mos_portal:Auction10355240: {ours: false, why: "системные блоки"}
+mos_portal:Need6321906:   {ours: false, why: "сопровождение КонсультантПлюс"}
+mos_portal:Need6321967:   {ours: false, why: "проектирование и внедрение — услуга"}
+mos_portal:Need6321926:   {ours: false, why: "сопровождение ПО и обслуживание техники"}
+mos_portal:Need6321832:   {ours: true, match: analog, why: "Dr.Web для детского сада"}
+mos_portal:Need6321704:   {ours: true, match: analog, why: "антивирусное ПО, вендор в карточке не назван — Kaspersky и Dr.Web есть в каталоге"}
+mos_portal:Need6321667:   {ours: false, why: "ТехноКад — чужой продукт"}
+mos_portal:Need6321645:   {ours: true, match: analog, why: "продление Dr.Web DSS на 56 ПК"}
+mos_portal:Need6321750:   {ours: false, why: "отраслевое ПО МДП/МДФНС с сопровождением"}
+mos_portal:Need6321610:   {ours: false, why: "АРМ ГИА и аттестация — услуга"}
+mos_portal:Need6321599:   {ours: false, why: "Saby — не наш вендор"}
+mos_portal:Auction10354769: {ours: false, why: "клавиатуры и патч-корды"}
+mos_portal:Auction10354754: {ours: false, why: "кабель и коммутатор"}
+mos_portal:Need6321145:   {ours: true, match: analog, why: "Dr.Web «Комплект для школ» на 100 ПК: SKU нет, линейка DSS есть"}
+mos_portal:Need6321163:   {ours: false, why: "сопровождение КонсультантПлюс"}
+mos_portal:Auction10354417: {ours: false, why: "электронные компоненты"}
+mos_portal:Need6321035:   {ours: null, why: "межсетевой экран — по названию не понять, ПАК или ПО; НМЦ не указана"}
+mos_portal:Need6323001:   {ours: false, why: "Saby"}
+mos_portal:Need6322860:   {ours: false, why: "Saby"}
+mos_portal:Need6322717:   {ours: false, why: "Saby"}
+mos_portal:Need6322704:   {ours: false, why: "SmetaWIZARD с сопровождением"}
+mos_portal:Need6322245:   {ours: false, match: none, why: "конструктор сайта школы — чужой продукт"}
+mos_portal:Need6322152:   {ours: false, why: "Куб CMS — чужой продукт"}
+mos_portal:Need6322164:   {ours: false, why: "Saby"}
+mos_portal:Need6321984:   {ours: false, why: "Saby"}
+mos_portal:Need6321836:   {ours: false, why: "Saby"}
+mos_portal:Need6321833:   {ours: false, why: "Saby"}
+mos_portal:Need6321766:   {ours: false, why: "АИС «СУПЕРБИЛЕТ» с сопровождением"}
+mos_portal:Need6321469:   {ours: false, why: "1С с внедрением — вендора нет в каталоге"}
+mos_portal:Need6321518:   {ours: false, why: "ПО удостоверяющего центра"}
+mos_portal:Need6321269:   {ours: false, why: "СЗИ сети ГИА — чужой продукт"}
+mos_portal:Need6321324:   {ours: false, why: "1С с внедрением"}
+mos_portal:Need6321446:   {ours: false, why: "база данных «Главная медсестра»"}
+mos_portal:Need6321337:   {ours: false, why: "база данных «Главная медсестра»"}
+mos_portal:Need6321251:   {ours: false, why: "Saby"}
+mos_portal:Need6320881:   {ours: false, why: "Контур.Экстерн"}
+mos_portal:Need6320879:   {ours: false, why: "Контур.Экстерн"}
+mos_portal:Need6320811:   {ours: false, why: "база данных «Госфинансы»"}
+mos_portal:Need6320625:   {ours: false, why: "база данных «Госфинансы плюс»"}
+mos_portal:Need6320484:   {ours: false, why: "база данных «Госзаказ Плюс»"}
+mos_portal:Need6320479:   {ours: false, why: "СоветникПРОФ"}
+mos_portal:Need6320146:   {ours: false, why: "Система ГАРАНТ"}
+mos_portal:Need6320094:   {ours: false, why: "электронная база данных"}
+mos_portal:Need6319972:   {ours: true, match: exact, why: "Astra Linux SE 1.8 «Смоленск»"}
+mos_portal:Need6320097:   {ours: false, why: "веб-панель контроля уборки — чужой продукт"}
+mos_portal:Need6319924:   {ours: false, why: "TRASSIR — вендора нет в каталоге"}
+mos_portal:Need6319845:   {ours: false, why: "база данных «Госфинансы»"}
+tektorg_market:20391246:  {ours: false, why: "сопровождение КонсультантПлюс"}
+tektorg_market:20387590:  {ours: false, why: "КонсультантПлюс, НМЦ 6,9 млн ₽"}
+tektorg_market:20398475:  {ours: false, why: "UserGate — вендора нет в каталоге"}
+tektorg_market:20289660:  {ours: false, why: "доработка ПО «Петролсофт»"}
+tektorg_market:20391675:  {ours: false, why: "АЖУР — чужой продукт"}
+fabrikant:680108597:      {ours: false, why: "Naumen, конкурс"}
+fabrikant:680067878:      {ours: false, why: "конкурс, НМЦ 16 млн ₽"}
+fabrikant:680060960:      {ours: false, why: "конкурс, НМЦ 1,14 млн ₽"}
+fabrikant:680026384:      {ours: false, why: "конкурс, НМЦ 9,8 млн ₽"}
+fabrikant:679973920:      {ours: false, why: "сопровождение 1С, конкурс"}
+fabrikant:680180882:      {ours: false, why: "обслуживание охранной сигнализации"}
+tektorg_market:20400975:  {ours: false, why: "сопровождение ПО банкоматов"}
+mos_portal:Need6323100:   {ours: false, why: "НМЦ 1,3 млн ₽ больше порога"}
+mos_portal:Need6323116:   {ours: true, match: analog, why: "антивирус на 5 ПК для школы"}
+mos_portal:Need6323127:   {ours: false, why: "СБИС ЭДО"}
+mos_portal:Auction10355695: {ours: false, why: "RuDesktop — вендора нет в каталоге"}
+mos_portal:Need6323253:   {ours: false, why: "Saby"}
+mos_portal:Need6320775:   {ours: false, why: "техподдержка — услуга"}
+mos_portal:Need6323313:   {ours: false, match: none, why: "конструктор сайта школы (Синерги) — чужой продукт"}
+mos_portal:Need6323326:   {ours: false, why: "ремонт досмотрового оборудования"}
+mos_portal:Need6323322:   {ours: false, why: "база данных «Госфинансы»"}
+mos_portal:Auction10354840: {ours: false, why: "сопровождение КонсультантПлюс"}
+fabrikant:680177531:      {ours: false, why: "конкурс, НМЦ 1,33 млн ₽"}

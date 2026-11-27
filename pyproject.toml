@@ -61,6 +61,8 @@ strict = true
 python_version = "3.13"
 plugins = ["pydantic.mypy"]
 files = ["app", "tests"]
+# tests/ без __init__.py: иначе test_stand находится дважды (как test_stand и tests.test_stand)
+explicit_package_bases = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true

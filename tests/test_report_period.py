@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 from openpyxl import Workbook
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.sql import ClauseElement
 
 from app.api.deals import _range
 from app.report.excel import ALL_TIME, MONEY, _fit_row, day_period
@@ -11,8 +12,8 @@ from app.report.excel import ALL_TIME, MONEY, _fit_row, day_period
 NOW = datetime(2026, 11, 27, 9, 0, tzinfo=UTC)
 
 
-def _sql(clause: object) -> str:
-    return str(clause.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[attr-defined]
+def _sql(clause: ClauseElement) -> str:
+    return str(clause.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))  # type: ignore[no-untyped-call]
 
 
 def test_day_period_covers_whole_msk_days() -> None:
