@@ -77,6 +77,9 @@ COMPONENT_RU = {
 # (заголовок, ширина)
 DEAL_COLUMNS = (
     ("N из 6", 7),
+    ("Размещено (МСК)", 16),
+    ("Найдено (МСК)", 16),
+    ("Статус", 22),
     ("Подача до (МСК)", 16),
     ("Осталось, ч", 9),
     ("Предмет (ссылка)", 45),
@@ -96,9 +99,6 @@ DEAL_COLUMNS = (
     ("Приоритет", 30),
     ("КП", 30),
     ("Документы", 9),
-    ("Размещено (МСК)", 16),
-    ("Найдено (МСК)", 16),
-    ("Статус", 22),
 )
 
 
@@ -270,6 +270,9 @@ def build_report(
         ws.append(
             [
                 f"{deal.conditions_met} из 6" if deal.conditions_met is not None else "нужен человек",
+                _msk(deal.start_at),
+                _msk(deal.created_at),
+                _stamp(deal, deal.id in proposals, decided.get(deal.id), now),
                 _msk(deal.end_at),
                 hours,
                 deal.title,
@@ -289,21 +292,18 @@ def build_report(
                 _priority(score),
                 _kp(deal, proposals.get(deal.id)),
                 len(files) if isinstance(files, list) else 0,
-                _msk(deal.start_at),
-                _msk(deal.created_at),
-                _stamp(deal, deal.id in proposals, decided.get(deal.id), now),
             ]
         )
         row = ws.max_row
-        ws.cell(row=row, column=4).hyperlink = deal.url
-        ws.cell(row=row, column=4).font = Font(color="0563C1", underline="single")
-        for col in (2, 21, 22):
+        ws.cell(row=row, column=7).hyperlink = deal.url
+        ws.cell(row=row, column=7).font = Font(color="0563C1", underline="single")
+        for col in (2, 3, 5):
             ws.cell(row=row, column=col).number_format = DATETIME
-        for col in (8, 9):
+        for col in (11, 12):
             ws.cell(row=row, column=col).number_format = MONEY
-        ws.cell(row=row, column=10).number_format = "0%"
+        ws.cell(row=row, column=13).number_format = "0%"
         if catalog_total is None and score.get("positions_without_price"):
-            ws.cell(row=row, column=9).fill = BLANK_FILL
+            ws.cell(row=row, column=12).fill = BLANK_FILL
         if deal.status is DealStatus.HOT:
             ws.cell(row=row, column=1).fill = HOT_FILL
         for col in range(1, len(DEAL_COLUMNS) + 1):
@@ -407,10 +407,10 @@ def _excluded(
         ("Заказчик", 30),
         ("Площадка", 14),
         ("НМЦ, ₽", 13),
-        ("Подача до (МСК)", 16),
-        ("Причина", 50),
         ("Размещено (МСК)", 16),
         ("Найдено (МСК)", 16),
+        ("Подача до (МСК)", 16),
+        ("Причина", 50),
     )
     _header(ws, columns)
     rows = session.scalars(
@@ -427,17 +427,17 @@ def _excluded(
                 deal.customer_name or "не указан",
                 platforms[deal.platform_id].name,
                 _num(deal.nmck),
-                _msk(deal.end_at),
-                reason or "не указана",
                 _msk(deal.start_at),
                 _msk(deal.created_at),
+                _msk(deal.end_at),
+                reason or "не указана",
             ]
         )
         r = ws.max_row
         ws.cell(row=r, column=1).hyperlink = deal.url
         ws.cell(row=r, column=1).font = Font(color="0563C1", underline="single")
         ws.cell(row=r, column=4).number_format = MONEY
-        for col in (5, 7, 8):
+        for col in (5, 6, 7):
             ws.cell(row=r, column=col).number_format = DATETIME
         for col in range(1, len(columns) + 1):
             ws.cell(row=r, column=col).alignment = WRAP

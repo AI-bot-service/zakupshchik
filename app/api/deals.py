@@ -172,6 +172,9 @@ def deals_page(
     period = day_period(*span) if span else None
     rows = deal_rows(session, view, now, period)
     chosen = frozenset(stamp or ())
+    shown = only_stamps(rows, chosen)
+    counts = view_counts(session, now, period)
+    counts[view] = len(shown)  # число на текущей вкладке — с учётом фильтра по штампам
     return request.app.state.templates.TemplateResponse(  # type: ignore[no-any-return]
         request,
         "deals.html",
@@ -179,8 +182,8 @@ def deals_page(
             "user": user,
             "view": view,
             "views": VIEW_RU,
-            "counts": view_counts(session, now, period),
-            "rows": only_stamps(rows, chosen),
+            "counts": counts,
+            "rows": shown,
             "stamps": stamp_counts(rows),
             "stamp_ru": STAMP_RU,
             "chosen": chosen,
