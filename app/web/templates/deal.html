@@ -65,6 +65,12 @@
     <a class="hint" href="/deals/{{ r.id }}">Отмена</a>
   </div>
   {% elif card.actions or card.can_skip %}
+  {% if st == 'submitted' and card.kp %}
+  <p class="kp-sent">
+    Заказчику ушло КП v{{ card.kp.version }}{% if card.kp_files %}: <a href="/deals/{{ r.id }}/files/{{ card.kp_files[0].id }}">{{ card.kp_files[0].name }}</a>{% endif %}
+    <span class="muted">{{ 'своё КП менеджера' if card.kp.by_manager else 'собрано роботом' }}, отмечено {{ r.stamp_sub }}</span>
+  </p>
+  {% endif %}
   <div class="flow-actions">
     {% for a in card.actions %}
     <form method="post" action="/deals/{{ r.id }}/status" class="flow-action">
@@ -257,7 +263,11 @@
       <ul class="files">
         {% for f in card.kp_files %}<li><a href="/deals/{{ r.id }}/files/{{ f.id }}">{{ f.name }}</a><span class="muted">{{ f.size_kb }} КБ</span></li>{% endfor %}
       </ul>
-      <p class="hint">{% if card.kp_by_manager %}Своё КП менеджера, робот его не пересобирает.{% else %}Цены по каталогу на сегодня, подтверждает менеджер. Подпись и печать ставятся вручную.{% endif %}</p>
+      <p class="hint">
+        {% if card.kp_by_manager %}Своё КП менеджера, приложено {{ card.kp.made_msk }}, версия v{{ card.kp.version }}. Робот его не пересобирает.
+        {% else %}Собрано роботом {{ card.kp.made_msk }}, версия v{{ card.kp.version }}. Цены по каталогу на этот день, подтверждает менеджер. Подпись и печать ставятся вручную.{% endif %}
+        {% if card.kp.sent %}<b>Отправлено заказчику.</b>{% else %}Заказчику пока не отправлено.{% endif %}
+      </p>
       {% elif st == 'taken' %}
       <p class="empty-word">Собирается</p>
       <p class="hint">Робот собирает КП — обновите страницу через минуту.</p>

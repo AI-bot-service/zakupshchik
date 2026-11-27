@@ -75,6 +75,7 @@ def apply_status(
     Повтор того же решения (второй «Беру в работу») ничего не меняет и в журнал не пишется: КП уже заказано.
     Исключения: «Не беру» с новой причиной и новое своё КП (details) — пишутся.
     «КП отправлено» без КП в карточке — 409: сначала собрать КП или приложить своё.
+    «Вернуть в работу» из «КП отправлено» снимает с последнего КП отметку «отправлено», файл остаётся.
     """
     if action not in MANAGER_ACTIONS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Такого статуса нет")
@@ -94,6 +95,14 @@ def apply_status(
             raise HTTPException(status.HTTP_409_CONFLICT, NO_KP)
         proposal.status = ProposalStatus.SENT
     if action is DealStatus.TAKEN:
+        if (
+            deal.status is DealStatus.SUBMITTED
+            and proposal is not None
+            and proposal.status is ProposalStatus.SENT
+        ):
+            proposal.status = (
+                ProposalStatus.DRAFT
+            )  # «Вернуть в работу»: КП остаётся, но отправленным не числится
         request_kp(deal)  # воркер соберёт КП по разбору в течение ~10 с, даже если сделка не на 100%
     change_status(session, deal, action, who, reason, proposal, details, always=again)
     session.commit()

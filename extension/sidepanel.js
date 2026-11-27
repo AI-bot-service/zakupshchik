@@ -222,6 +222,8 @@ function decision(card) {
     r.status === "submitted"
       ? [
           h("p", {}, `КП отправлено заказчику ${r.stamp_sub}.`),
+          card.kp && h("p", {}, `Ушло КП v${card.kp.version}${card.kp_files.length ? `: ${card.kp_files[0].name}` : ""} — ${card.kp.by_manager ? "своё КП менеджера" : "собрано роботом"}.`),
+          card.kp_files.length > 0 && fileList(r.id, card.kp_files.slice(0, 1)),
           h("button", { class: "btn btn-quiet", type: "button", onclick: () => send("taken") }, "Вернуть в работу"),
           h("p", { class: "hint" }, "Если отметили по ошибке. КП в карточке остаётся."),
         ]
@@ -307,7 +309,17 @@ function renderCard(card) {
       { class: "sheet" },
       h("h2", {}, "Коммерческое предложение"),
       card.kp_files.length
-        ? [fileList(r.id, card.kp_files), h("p", { class: "muted small" }, "Цены по каталогу на сегодня, подтверждает менеджер.")]
+        ? [
+            fileList(r.id, card.kp_files),
+            h(
+              "p",
+              { class: "muted small" },
+              card.kp.by_manager
+                ? `Своё КП менеджера, приложено ${card.kp.made_msk}, версия v${card.kp.version}. Робот его не пересобирает. `
+                : `Собрано роботом ${card.kp.made_msk}, версия v${card.kp.version}. Цены по каталогу на этот день, подтверждает менеджер. `,
+              card.kp.sent ? h("b", {}, "Отправлено заказчику.") : "Заказчику пока не отправлено.",
+            ),
+          ]
         : r.status === "taken"
           ? [h("p", {}, "Робот собирает КП — откройте сделку ещё раз через минуту.")]
           : [h("p", {}, "КП не собрано автоматически: сделка подходит не на 100%. Нажмите «Беру в работу» — робот соберёт КП с аналогами и пустыми ценами."), card.kp_blockers.length && h("ul", { class: "why" }, card.kp_blockers.map((b) => h("li", {}, b)))],

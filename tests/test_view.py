@@ -117,6 +117,14 @@ def test_decisions_go_to_deal_journal_once() -> None:
     assert log[3].reason == "нет партнёрства"
 
 
+def test_back_to_work_unmarks_sent_kp() -> None:
+    proposal = Proposal(id=5, deal_id=1, version=2, items={"source": "manager"}, status=ProposalStatus.SENT)
+    deal = Deal(id=1, status=DealStatus.SUBMITTED, conditions_met=5, rules_version="abc", score_breakdown={})
+    apply_status(FakeSession(proposal), deal, DealStatus.TAKEN, "", WHO)  # type: ignore[arg-type]
+    assert deal.status is DealStatus.TAKEN
+    assert proposal.status is ProposalStatus.DRAFT  # файл КП остаётся, отметка «отправлено» снята
+
+
 def _log(i: int, before: DealStatus | None, after: DealStatus) -> DealStatusLog:
     return DealStatusLog(
         id=i,

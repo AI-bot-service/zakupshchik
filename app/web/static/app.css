@@ -263,6 +263,8 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
 .need-kp { display: grid; gap: var(--sp-2); padding: var(--sp-3); border-left: 3px solid var(--c-down); border-radius: 0 var(--radius) var(--radius) 0; background: var(--c-down-soft); }
 .need-kp > b { color: var(--c-down); }
 .need-kp form { display: grid; gap: var(--sp-2); margin: 0; justify-items: start; }
+.kp-sent { display: grid; gap: var(--sp-1); margin: 0 0 var(--sp-3); padding: var(--sp-3); border-left: 3px solid var(--c-ok); border-radius: 0 var(--radius) var(--radius) 0; background: var(--c-ok-soft); max-width: none; overflow-wrap: anywhere; }
+.kp-sent .muted { font-size: var(--fs-sm); }
 .upload { display: grid; gap: var(--sp-2); margin-top: var(--sp-2); justify-items: start; }
 .upload .field { width: 100%; min-width: 0; }
 .upload .btn { white-space: normal; text-align: center; max-width: 100%; padding-block: var(--sp-2); line-height: 1.25; }

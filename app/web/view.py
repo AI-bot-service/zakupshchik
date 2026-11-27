@@ -26,6 +26,7 @@ from app.db.models import (
     MatchKind,
     Platform,
     Proposal,
+    ProposalStatus,
 )
 from app.notify.letter_html import SHORT
 from app.notify.letters import rub, short_rub
@@ -237,6 +238,17 @@ class PositionView:
 
 
 @dataclass(frozen=True)
+class KpInfo:
+    """Последняя версия КП: чьё, под каким именем приложено, когда, ушло ли заказчику."""
+
+    version: int
+    by_manager: bool
+    original: str | None
+    made_msk: str
+    sent: bool
+
+
+@dataclass(frozen=True)
 class FileView:
     id: str
     name: str
@@ -278,6 +290,7 @@ class DealCard:
     not_license_reason: str | None
     kp_files: list[FileView]
     kp_by_manager: bool
+    kp: KpInfo | None
     kp_blockers: list[str]
     docs: list[FileView]
     steps: list[StepView]
@@ -490,12 +503,22 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
         select(Proposal).where(Proposal.deal_id == deal.id).order_by(Proposal.version.desc()).limit(1)
     )
     kp_files = []
+    kp: KpInfo | None = None
     if proposal is not None:
-        for i, path in enumerate((proposal.file_path, (proposal.items or {}).get("pdf"))):
+        meta = proposal.items or {}
+        by_manager = meta.get("source") == "manager"
+        original = meta.get("original_name") if by_manager else None
+        kp = KpInfo(
+            proposal.version,
+            by_manager,
+            original,
+            msk(proposal.created_at),
+            proposal.status is ProposalStatus.SENT,
+        )
+        for i, path in enumerate((proposal.file_path, meta.get("pdf"))):
             if path and Path(path).is_file():
-                kp_files.append(
-                    FileView(f"kp{i}", Path(path).name, Path(path).stat().st_size // 1024, True, None)
-                )
+                name = original if i == 0 and original else Path(path).name  # своё КП — под именем менеджера
+                kp_files.append(FileView(f"kp{i}", name, Path(path).stat().st_size // 1024, True, None))
 
     saved = {f.name: f for f in session.scalars(select(DealFile).where(DealFile.deal_id == deal.id))}
     details = deal.raw_masked.get("details") or {}
@@ -574,7 +597,8 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
         if analysis and not analysis.is_license_supply
         else None,
         kp_files=kp_files,
-        kp_by_manager=bool(proposal and (proposal.items or {}).get("source") == "manager"),
+        kp_by_manager=bool(kp and kp.by_manager),
+        kp=kp,
         kp_blockers=list(deal.score_breakdown.get("kp_blockers") or []),
         docs=docs,
         steps=steps,
