@@ -21,42 +21,51 @@
     <li><span><b>Отметьте решение</b> в панели или в карточке на стенде. «Беру в работу» — робот собирает КП по разбору и кладёт в карточку, напоминания о сделке прекращаются. «КП отправлено» — вы отправили КП заказчику на площадке, на штампе «Отправлено» и дата; если КП в карточке нет, стенд предложит собрать его или приложить своё. «Не беру» — с причиной, она сохраняется в истории сделки. Статус виден в списке сделок и в Excel.</span></li>
   </ol>
 
-  <section class="panel">
-    <h2>Ключ плагина</h2>
-    {% if key %}
-    <p>Скопируйте ключ сейчас: стенд хранит только его отпечаток и показать его ещё раз не сможет.</p>
-    <div class="field">
-      <label for="ext-key">Ваш ключ</label>
-      <span class="copy-field">
-        <input id="ext-key" value="{{ key }}" readonly autofocus spellcheck="false">
-        <button class="btn btn-primary btn-small" type="button" data-copy-from="ext-key">Скопировать</button>
-      </span>
+  <section class="panel key-panel">
+    <div class="key-block">
+      <h2>Ключ плагина</h2>
+      {% if key %}
+      <p class="hint">Скопируйте ключ сейчас: стенд хранит только его отпечаток и показать его ещё раз не сможет.</p>
+      <div class="field">
+        <label for="ext-key">Ваш ключ</label>
+        <span class="copy-field">
+          <input id="ext-key" value="{{ key }}" readonly autofocus spellcheck="false">
+          <button class="btn btn-primary btn-small" type="button" data-copy-from="ext-key">Скопировать</button>
+        </span>
+      </div>
+      <p class="hint">Ключи на других компьютерах продолжают работать.</p>
+      {% else %}
+      <p class="hint">Ключ личный: решения из плагина записываются на вас и в журнал сделки с подписью устройства. На каждый компьютер свой ключ, новый ключ старые не отключает.</p>
+      {% endif %}
     </div>
-    <p class="muted">Ключи на других компьютерах продолжают работать.</p>
-    {% else %}
-    <p class="muted">Ключ личный: решения из плагина записываются на вас и в журнал сделки с подписью устройства. На каждый компьютер — свой ключ, новый ключ старые не отключает.</p>
-    {% endif %}
     {% if keys %}
-    <h3 class="keys-title">Подключённые устройства</h3>
-    <ul class="keys">
-      {% for k in keys %}
-      <li>
-        <span><b>{{ k.label }}</b><br><span class="muted">выпущен {{ k.created }} · {{ k.used }}</span></span>
-        <form method="post" action="/extension/key/{{ k.id }}/revoke">
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <button class="btn btn-quiet btn-small" type="submit">Отозвать</button>
-        </form>
-      </li>
-      {% endfor %}
-    </ul>
+    <div class="key-block">
+      <h3 class="key-title">Подключённые устройства <span class="muted">{{ keys|length }}</span></h3>
+      <ul class="keys">
+        {% for k in keys %}
+        <li>
+          <div class="key-meta">
+            <b>{{ k.label }}</b>
+            <span>выпущен {{ k.created }}</span>
+            <span class="{{ 'key-seen' if k.seen else '' }}">{{ k.used }}</span>
+          </div>
+          <form method="post" action="/extension/key/{{ k.id }}/revoke">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn btn-quiet btn-small" type="submit">Отозвать</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
     {% endif %}
-    <form method="post" action="/extension/key" class="key-form">
+    <form method="post" action="/extension/key" class="key-block">
       <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if keys %}<h3 class="key-title">Новое устройство</h3>{% endif %}
       <div class="field">
         <label for="key-label">Для какого компьютера</label>
         <input id="key-label" name="label" maxlength="80" placeholder="Например: рабочий ноутбук">
       </div>
-      <button class="btn {{ 'btn-quiet' if key or keys else 'btn-primary' }}" type="submit">Выпустить ключ для этого компьютера</button>
+      <button class="btn {{ 'btn-quiet' if key else 'btn-primary' }}" type="submit">Выпустить ключ</button>
     </form>
   </section>
 </div>

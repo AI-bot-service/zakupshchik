@@ -192,7 +192,8 @@ def _page_ctx(request: Request, session: Session, user: str, key: str | None) ->
                 "id": k.id,
                 "label": k.label,
                 "created": msk(k.created_at),
-                "used": f"на связи {msk(k.last_used_at)}" if k.last_used_at else "на связи: ещё не было",
+                "used": f"на связи {msk(k.last_used_at)}" if k.last_used_at else "ещё не подключался",
+                "seen": k.last_used_at is not None,
             }
             for k in active_keys(session, user)
         ],
