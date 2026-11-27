@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Плагин · Закупщик{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Плагин для Chrome</h1>
+    <p class="muted">Уведомляет о выгодных сделках и показывает разбор робота рядом со страницей закупки. Работает в Chrome и Яндекс Браузере.</p>
+  </div>
+</div>
+
+<div class="ext-grid">
+  <ol class="chain">
+    <li><span><b>Скачайте и распакуйте архив</b> <a href="/extension.zip">zakupshchik-extension.zip</a>. Адрес стенда в нём уже прописан.</span></li>
+    <li><span><b>Установите.</b> Откройте <code>chrome://extensions</code>, включите «Режим разработчика», нажмите «Загрузить распакованное» и выберите папку.</span></li>
+    <li><span><b>Вставьте ключ.</b> Нажмите на значок «Закупщик» — откроется боковая панель — и вставьте ключ, выпущенный справа.</span></li>
+    <li><span><b>Откройте закупку на площадке.</b> Если робот её разобрал, разбор появится в панели. О сделках от {{ notify_min }} из 5 приходит уведомление, число на значке — сколько их сейчас.</span></li>
+  </ol>
+
+  <section class="sheet side-block">
+    <h2>Ключ плагина</h2>
+    {% if key %}
+    <p>Скопируйте ключ сейчас: стенд хранит только его отпечаток и показать его ещё раз не сможет.</p>
+    <div class="field">
+      <label for="ext-key">Ваш ключ</label>
+      <input id="ext-key" value="{{ key }}" readonly autofocus>
+    </div>
+    <p class="muted">Старый ключ, если был, больше не работает.</p>
+    {% else %}
+    <p class="muted">Ключ личный: решения «беру / не беру» из плагина записываются на вас. Новый ключ отключает старый.</p>
+    {% endif %}
+    <form method="post" action="/extension/key">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn {{ 'btn-quiet' if key else 'btn-primary' }}" type="submit">{{ 'Выпустить другой ключ' if key else 'Выпустить ключ' }}</button>
+    </form>
+  </section>
+</div>
+
+<p class="muted note">Плагин читает только адрес открытой вкладки, чтобы найти закупку в базе робота. Пароли и cookies площадок он не трогает, на площадке ничего не нажимает и заявку не подаёт.</p>
+{% endblock %}

@@ -312,3 +312,7 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
   .topbar { gap: var(--sp-2); }
   .topbar nav { gap: var(--sp-2); }
 }
+.ext-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--sp-6); align-items: start; }
+.ext-grid .side-block form { margin: 0; }
+code { font-size: var(--fs-sm); background: var(--c-sheet); padding: 1px var(--sp-1); border-radius: var(--radius); }
+@media (max-width: 960px) { .ext-grid { grid-template-columns: 1fr; } }

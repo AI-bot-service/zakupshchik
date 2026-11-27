@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Закупщик — помощник менеджера",
+  "short_name": "Закупщик",
+  "version": "0.1.0",
+  "description": "Уведомляет о выгодных закупках ПО и показывает разбор робота рядом со страницей закупки.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "alarms", "notifications", "sidePanel", "tabs"],
+  "host_permissions": ["https://zakupki-robot.systemtool.ru/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "Закупщик: открыть разбор" },
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" }
+}

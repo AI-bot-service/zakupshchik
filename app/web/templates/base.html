@@ -13,7 +13,7 @@
   <header class="topbar">
     <a class="brand" href="/">Закупщик</a>
     <nav aria-label="Разделы">
-      {% if user %}<a href="/deals">Сделки</a>{% endif %}
+      {% if user %}<a href="/deals">Сделки</a><a href="/extension">Плагин</a>{% endif %}
       <a href="/status">Состояние стенда</a>
       {% if user %}
       <form method="post" action="/logout"><button class="btn btn-quiet" type="submit">Выйти</button></form>

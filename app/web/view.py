@@ -132,6 +132,7 @@ class DealRow:
     status_ru: str
     has_kp: bool
     reason: str | None
+    url: str
 
 
 def _subject(deal: Deal) -> str:
@@ -174,6 +175,7 @@ def deal_rows(session: Session, view: View, now: datetime) -> list[DealRow]:
                 status_ru=STATUS_RU[d.status],
                 has_kp=d.id in with_kp,
                 reason=d.filter_reason,
+                url=d.url,
             )
         )
     return rows
@@ -390,6 +392,7 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
             status_ru=STATUS_RU[deal.status],
             has_kp=bool(kp_files),
             reason=deal.filter_reason,
+            url=deal.url,
         ),
         url=deal.url,
         nmck=rub(deal.nmck),
@@ -443,3 +446,12 @@ def file_path(session: Session, deal: Deal, file_id: str) -> Path | None:
     if not resolved.is_relative_to(FILES_ROOT.resolve()) or not resolved.is_file():
         return None
     return resolved
+
+
+def find_by_url(session: Session, url: str) -> Deal | None:
+    """Сделка по адресу вкладки: без якоря и хвостового «/», с www и без."""
+    clean = url.split("#", 1)[0].rstrip("/")
+    variants = {clean, clean.replace("://www.", "://", 1), clean.replace("://", "://www.", 1)}
+    return session.scalars(
+        select(Deal).where(Deal.url.in_(variants)).order_by(Deal.id.desc()).limit(1)
+    ).first()

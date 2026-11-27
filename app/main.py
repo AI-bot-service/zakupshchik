@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api import auth, deals, status
+from app.api import auth, deals, ext, status
 from app.core.logging import configure_logging
 from app.core.provenance import BUILD_HEADER, BUILD_MARK
 from app.core.settings import Settings
@@ -66,6 +66,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(status.router)
     app.include_router(auth.router)
     app.include_router(deals.router)
+    app.include_router(ext.router)
+    app.include_router(ext.pages)
 
     @app.get("/")
     def home(user: Annotated[str, Depends(auth.require_user)]) -> RedirectResponse:

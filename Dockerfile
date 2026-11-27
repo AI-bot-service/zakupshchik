@@ -31,6 +31,7 @@ COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app app ./app
 COPY --chown=app:app config ./config
 COPY --chown=app:app prompts ./prompts
+COPY --chown=app:app extension ./extension
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

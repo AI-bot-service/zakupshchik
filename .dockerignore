@@ -14,4 +14,3 @@ scripts
 .ruff_cache
 .pytest_cache
 node_modules
-extension

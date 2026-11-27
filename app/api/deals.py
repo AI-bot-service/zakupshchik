@@ -43,13 +43,28 @@ def csrf_token(request: Request) -> str:
     return token
 
 
-def _check_csrf(request: Request, token: str) -> None:
+def check_csrf(request: Request, token: str) -> None:
     expected = request.session.get(CSRF_KEY)
     if not isinstance(expected, str) or not secrets.compare_digest(expected, token):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Форма устарела, обновите страницу")
 
 
-def _deal(session: Session, deal_id: int) -> Deal:
+def apply_status(
+    session: Session, deal: Deal, action: DealStatus, reason: str, manager_id: int | None
+) -> Deal:
+    """Решение менеджера со стенда, из плагина или письма: статус сделки + запись в feedback."""
+    if action not in MANAGER_ACTIONS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Такого статуса нет")
+    reason = reason.strip()
+    if action is DealStatus.SKIPPED and not reason:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Напишите, почему не берёте сделку")
+    deal.status = action
+    session.add(Feedback(deal_id=deal.id, manager_id=manager_id, action=action, reason=reason or None))
+    session.commit()
+    return deal
+
+
+def get_deal(session: Session, deal_id: int) -> Deal:
     deal = session.get(Deal, deal_id)
     if deal is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Сделка не найдена")
@@ -77,7 +92,7 @@ def deals_page(request: Request, user: User, session: Db, view: View = View.OPEN
 
 @router.get("/deals/{deal_id}", response_class=HTMLResponse)
 def deal_page(request: Request, deal_id: int, user: User, session: Db) -> HTMLResponse:
-    card = deal_card(session, _deal(session, deal_id), datetime.now(UTC))
+    card = deal_card(session, get_deal(session, deal_id), datetime.now(UTC))
     return request.app.state.templates.TemplateResponse(  # type: ignore[no-any-return]
         request,
         "deal.html",
@@ -100,23 +115,15 @@ def set_status(
     csrf: Annotated[str, Form(max_length=64)],
     reason: Annotated[str, Form(max_length=500)] = "",
 ) -> RedirectResponse:
-    _check_csrf(request, csrf)
-    if action not in MANAGER_ACTIONS:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Такого статуса нет")
-    reason = reason.strip()
-    if action is DealStatus.SKIPPED and not reason:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Напишите, почему не берёте сделку")
-    deal = _deal(session, deal_id)
-    deal.status = action
-    session.add(Feedback(deal_id=deal.id, action=action, reason=reason or None))
-    session.commit()
+    check_csrf(request, csrf)
+    deal = apply_status(session, get_deal(session, deal_id), action, reason, None)
     log.info("deal_status", deal_id=deal.id, action=action.value, user=user)
     return RedirectResponse(f"/deals/{deal.id}?saved=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/deals/{deal_id}/files/{file_id}")
 def deal_file(deal_id: int, file_id: str, user: User, session: Db) -> FileResponse:
-    path = file_path(session, _deal(session, deal_id), file_id)
+    path = file_path(session, get_deal(session, deal_id), file_id)
     if path is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Файла нет на стенде — откройте закупку на площадке")
     return FileResponse(path, filename=path.name, content_disposition_type="attachment")
