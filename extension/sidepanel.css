@@ -14,7 +14,7 @@ a { color: var(--c-stamp); text-underline-offset: 3px; }
 .bar { position: sticky; top: 0; z-index: 1; display: flex; gap: var(--sp-2); align-items: baseline; padding: var(--sp-2) var(--sp-3); background: var(--c-sheet); border-bottom: 1px solid var(--c-rule); }
 .brand { font-weight: 800; font-size: var(--fs-base); }
 .bar .link { margin-left: auto; }
-main { padding: var(--sp-3); display: grid; gap: var(--sp-3); }
+main { padding: var(--sp-3) var(--sp-3) calc(var(--sp-3) + 36px); display: grid; gap: var(--sp-3); }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 var(--sp-3); border: 1px solid transparent; border-radius: var(--radius); font: inherit; font-weight: 700; cursor: pointer; transition: background var(--t-fast) var(--ease); }
 .btn-primary { background: var(--c-stamp); color: var(--c-sheet); }
@@ -94,3 +94,4 @@ details summary { cursor: pointer; font-weight: 600; color: var(--c-stamp); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 .hint { margin: calc(-1 * var(--sp-1)) 0 var(--sp-1); font-size: var(--fs-sm); line-height: var(--lh-base); color: var(--c-ink-muted); }
+.foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1; padding: var(--sp-2) var(--sp-3); background: var(--c-sheet); border-top: 1px solid var(--c-rule); font-size: 0.75rem; line-height: 1.3; }

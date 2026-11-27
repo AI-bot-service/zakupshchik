@@ -198,7 +198,8 @@ def deal_html(letter: DealLetter, now: datetime, rules: Rules | None = None) -> 
             f"border-left:4px solid {DOWN};"
             f'padding:12px 16px;font:400 14px/1.45 {FONT};color:{INK}">'
             "<b>Позиции нет в каталоге Софтлайна.</b> "
-            "Решите, искать ли продукт у дистрибьютора или не идти. КП робот не сформировал.</div></td></tr>"
+            "Решите, искать ли продукт у дистрибьютора или не идти. Если берёте — нажмите "
+            "«Беру в работу» в карточке, робот соберёт КП с пустыми ценами.</div></td></tr>"
         )
     facts = [
         ("НМЦ", _e(rub(d.nmck)), True, None),
@@ -237,7 +238,11 @@ def deal_html(letter: DealLetter, now: datetime, rules: Rules | None = None) -> 
         )
     elif in_catalog:
         blockers = d.score_breakdown.get("kp_blockers") or []
-        files.append("КП не сформировано: " + ("; ".join(blockers) if blockers else "нет данных"))
+        files.append(
+            "КП не сформировано: "
+            + ("; ".join(blockers) if blockers else "нет данных")
+            + ". Нажмите «Беру в работу» в карточке — робот соберёт КП с аналогами и пустыми ценами"
+        )
     if letter.docs_attached:
         files.append("Документы закупки: " + ", ".join(letter.docs_attached))
     if letter.docs_not_attached:

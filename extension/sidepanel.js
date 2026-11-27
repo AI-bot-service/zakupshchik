@@ -6,6 +6,15 @@ import { canPickFolder, install } from "./update.js";
 const root = document.getElementById("root");
 const checked = document.getElementById("checked");
 const refreshBtn = document.getElementById("refresh");
+const foot = document.getElementById("foot");
+
+// Нижняя строка всегда на виду: версия плагина и его сборки, версия агента разбора и правил на стенде.
+function renderFoot(inbox) {
+  const plugin = `Плагин ${chrome.runtime.getManifest().version}` + (inbox?.build ? `, сборка ${String(inbox.build).slice(0, 8)}` : "");
+  const agent = inbox?.agent ? `агент ${inbox.agent}` : "агент —";
+  const rules = inbox?.rules ? `правила ${inbox.rules}` : "";
+  foot.textContent = [plugin, agent, rules].filter(Boolean).join(" · ");
+}
 const SKIP_REASONS = ["Не наш вендор", "Мало времени", "Цена не проходит", "Не устраивают условия", "Другое"];
 
 let current = null; // id открытого разбора
@@ -129,6 +138,7 @@ async function renderList() {
     show(...nodes);
     return;
   }
+  renderFoot(inbox);
   checked.textContent = "проверено " + new Date(inbox.checked_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
   nodes.push(h("h1", {}, "Идёт приём КП"));
   nodes.push(h("p", { class: "muted" }, `Уведомляем, когда выполнено ${inbox.notify_min} из 6 условий и больше. Откройте закупку на площадке — разбор появится здесь.`));
@@ -209,7 +219,7 @@ function decision(card) {
     h("h2", {}, "Ваше решение"),
     note,
     h("button", { class: "btn btn-primary", type: "button", onclick: () => send("taken") }, "Беру в работу"),
-    h("p", { class: "hint" }, "Вы готовите КП. Плагин перестаёт напоминать о сделке, в отчёте статус «беру»."),
+    h("p", { class: "hint" }, "Робот сразу собирает КП по разбору — аналоги, позиции вне каталога и пустые цены тоже — и кладёт в блок «Коммерческое предложение». Вы проверяете цены и подаёте. Напоминания о сделке прекращаются, статус «беру»."),
     h("button", { class: "btn btn-quiet", type: "button", onclick: () => send("submitted") }, "КП подано"),
     h("p", { class: "hint" }, "КП отправлено заказчику на площадке. Статус «подано» — по нему видно, сколько КП подано за период."),
     h(
@@ -271,7 +281,9 @@ function renderCard(card, flash) {
       h("h2", {}, "Коммерческое предложение"),
       card.kp_files.length
         ? [fileList(r.id, card.kp_files), h("p", { class: "muted small" }, "Цены по каталогу на сегодня, подтверждает менеджер.")]
-        : [h("p", {}, "КП не собрано."), card.kp_blockers.length && h("ul", { class: "why" }, card.kp_blockers.map((b) => h("li", {}, b)))],
+        : r.status === "taken"
+          ? [h("p", {}, "Робот собирает КП — откройте сделку ещё раз через минуту.")]
+          : [h("p", {}, "КП не собрано автоматически: сделка подходит не на 100%. Нажмите «Беру в работу» — робот соберёт КП с аналогами и пустыми ценами."), card.kp_blockers.length && h("ul", { class: "why" }, card.kp_blockers.map((b) => h("li", {}, b)))],
     ),
     card.conditions.length &&
       h(
@@ -365,4 +377,5 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes.focus?.newValue) start();
 });
 renderUpdate();
+chrome.storage.local.get("inbox").then(({ inbox }) => renderFoot(inbox));
 start();

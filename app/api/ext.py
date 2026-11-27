@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agent.analyze import load_prompt
 from app.api.auth import require_user
 from app.api.deals import apply_status, check_csrf, csrf_token, get_deal
 from app.db.models import DealStatus, Manager
@@ -71,26 +72,37 @@ def require_manager(session: Db, authorization: Annotated[str, Header()] = "") -
 Mgr = Annotated[Manager, Depends(require_manager)]
 
 
-def _notify_min(session: Session) -> int:
+def _rules_info(session: Session) -> tuple[int, str]:
+    """Порог уведомления и версия действующих правил."""
     try:
-        min_n = active_rules(session).profile.notify.min_conditions
+        rules = active_rules(session)
         session.commit()
-        return min_n
+        return rules.profile.notify.min_conditions, rules.version
     except (RulesError, ValueError, OSError):
-        return 5
+        return 5, "—"
+
+
+def _agent_version() -> str:
+    """Версия агента разбора = версия промпта (хэш файла prompts/analyze.md)."""
+    try:
+        return load_prompt("analyze").version
+    except OSError:
+        return "—"
 
 
 @router.get("/inbox")
 def inbox(request: Request, session: Db, manager: Mgr) -> dict[str, Any]:
     """Сделки с открытым приёмом КП. `notify` — порог из действующих правил, решённые не уведомляем."""
     now = datetime.now(UTC)
-    min_n = _notify_min(session)
+    min_n, rules_version = _rules_info(session)
     rows = deal_rows(session, View.OPEN, now)
     done = (DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
     return {
         "manager": manager.name,
         "build": package(request.app.state.settings.public_url)[0],
         "notify_min": min_n,
+        "agent": _agent_version(),
+        "rules": rules_version,
         "checked_at": now.isoformat(),
         "deals": [asdict(r) | {"notify": (r.n or 0) >= min_n and r.status not in done} for r in rows],
     }
@@ -145,7 +157,7 @@ def _page_ctx(request: Request, session: Session, user: str, key: str | None) ->
         "user": user,
         "csrf": csrf_token(request),
         "key": key,
-        "notify_min": _notify_min(session),
+        "notify_min": _rules_info(session)[0],
         "version": version,
         "build": build,
     }

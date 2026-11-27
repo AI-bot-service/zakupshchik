@@ -1,4 +1,7 @@
-"""Что попадёт в КП (§7.1): только для полностью подходящей сделки.
+"""Что попадёт в КП (§7.1): сам — для полностью подходящей сделки, по «Беру в работу» — для любой разобранной.
+
+По запросу менеджера: аналог идёт товаром каталога, позиция без товара — строкой из закупки с пустой ценой.
+Цена каталога «на N ПК» — за пакет: в КП число пакетов; цена за диапазон узлов — пустая, считает менеджер.
 
 Наименования, артикулы и цены — из каталога, количество — из закупки. Нет цены в каталоге → строка
 с пустой ценой (заливка в файле), итог «без учёта позиций с пустой ценой». ПО из реестра Минцифры —
@@ -9,13 +12,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 from typing import Any
 
 from app.agent.schemas import Analysis
 from app.db.models import CatalogItem, Deal, MatchKind, PaymentTerms, TriState
 from app.scoring.rules import Kp
-from app.scoring.score import ScoreResult
+from app.scoring.score import ScoreResult, pack_size, priced_by_band
 
 _CENT = Decimal("0.01")
 
@@ -31,7 +34,7 @@ class KpLine:
     qty: Decimal
     unit_price: Decimal | None
     vat_free: bool
-    catalog_item_id: int
+    catalog_item_id: int | None
 
     @property
     def amount(self) -> Decimal | None:
@@ -127,26 +130,46 @@ def _delivery(analysis: Analysis, used: list[CatalogItem], kp: Kp) -> str:
     return text
 
 
+def _line(item: CatalogItem, qty: Decimal) -> KpLine:
+    """Строка КП по товару каталога: цена за пакет → число пакетов, цена за диапазон узлов → пустая."""
+    price = item.price
+    if (size := pack_size(item.name)) is not None:
+        qty = (qty / size).to_integral_value(rounding=ROUND_CEILING)
+    elif priced_by_band(item.name):
+        price = None
+    return KpLine(
+        sku=item.sku,
+        name=item.name,
+        qty=qty,
+        unit_price=price,
+        vat_free=item.rf_registry_no is not None,
+        catalog_item_id=item.id,
+    )
+
+
 def build_draft(
-    deal: Deal, analysis: Analysis, items: dict[int, CatalogItem], kp: Kp, today: date
+    deal: Deal,
+    analysis: Analysis,
+    items: dict[int, CatalogItem],
+    kp: Kp,
+    today: date,
+    on_request: bool = False,
 ) -> KpDraft:
+    """on_request — менеджер нажал «Беру в работу»: КП нужен и при аналогах, вне каталога, без количества."""
     lines: list[KpLine] = []
     used: list[CatalogItem] = []
     for p in analysis.positions:
-        if p.catalog_item_id is None or p.qty is None:
+        item = items.get(p.catalog_item_id) if p.catalog_item_id is not None else None
+        if not on_request and (item is None or p.qty is None):
             raise ValueError("позиция без товара или количества — сначала blockers()")
-        item = items[p.catalog_item_id]
-        used.append(item)
-        lines.append(
-            KpLine(
-                sku=item.sku,
-                name=item.name,
-                qty=Decimal(str(p.qty)),
-                unit_price=item.price,
-                vat_free=item.rf_registry_no is not None,
-                catalog_item_id=item.id,
+        qty = Decimal(str(p.qty or 1))
+        if item is None:
+            lines.append(
+                KpLine(sku="", name=p.name, qty=qty, unit_price=None, vat_free=False, catalog_item_id=None)
             )
-        )
+            continue
+        used.append(item)
+        lines.append(_line(item, qty))
     valid = max(kp.valid_days, deal.kp_min_valid_days or 0)
     return KpDraft(
         customer=deal.customer_name or "Заказчику",

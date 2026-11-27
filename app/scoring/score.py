@@ -70,14 +70,23 @@ _BAND = re.compile(
 )
 
 
+def pack_size(name: str) -> Decimal | None:
+    """Цена товара — за пакет из N мест («на 30 ПК»)."""
+    m = _PACK.search(name)
+    return Decimal(m.group(1)) if m and int(m.group(1)) > 0 else None
+
+
+def priced_by_band(name: str) -> bool:
+    """Цена — за диапазон узлов («по количеству узлов», «50-99 узлов»): на число мест не пересчитать."""
+    return _BAND.search(name) is not None
+
+
 def line_cost(name: str, price: Decimal, qty: float | None) -> Decimal | None:
     """Стоимость позиции по цене каталога. None — цена за диапазон, честно посчитать нельзя."""
     need = Decimal(str(qty or 1))
-    if (m := _PACK.search(name)) and int(m.group(1)) > 0:
-        per_pack = Decimal(m.group(1))
-        packs = (need / per_pack).to_integral_value(rounding=ROUND_CEILING)
-        return price * packs
-    if _BAND.search(name):
+    if (size := pack_size(name)) is not None:
+        return price * (need / size).to_integral_value(rounding=ROUND_CEILING)
+    if priced_by_band(name):
         return None
     return price * need
 

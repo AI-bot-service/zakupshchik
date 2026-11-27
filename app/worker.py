@@ -193,6 +193,18 @@ def manual(factory: sessionmaker[Session], settings: Settings) -> None:
     log.info("manual_run_done", row=row_id, failed=failed)
 
 
+def requested_proposals(factory: sessionmaker[Session]) -> None:
+    """КП по «Беру в работу»: опрос раз в 10 с, чтобы файл появился в карточке почти сразу."""
+    try:
+        with factory.begin() as session:
+            run = make_proposals(session, active_rules(session), datetime.now(UTC), only_requested=True)
+    except Exception as exc:  # сбой одной сделки не роняет воркер
+        log.exception("kp_request_failed", error=type(exc).__name__)
+        return
+    if run.made:
+        log.info("kp_requested_made", made=run.made, pdf=run.pdf)
+
+
 def import_catalog(factory: sessionmaker[Session]) -> None:
     if not CATALOG_FILE.exists():
         log.warning("catalog_missing", path=str(CATALOG_FILE))
@@ -239,6 +251,9 @@ def main() -> None:
         manual, "interval", seconds=10, args=[factory, settings], id="manual", max_instances=1, coalesce=True
     )
     # Каталог: выгрузка store дописывается — подхватываем раз в 6 часов
+    scheduler.add_job(
+        requested_proposals, "interval", seconds=10, args=[factory], id="kp", max_instances=1, coalesce=True
+    )
     scheduler.add_job(import_catalog, "interval", hours=6, args=[factory], id="catalog", max_instances=1)
     log.info("worker_started", interval_min=interval)
     scheduler.start()

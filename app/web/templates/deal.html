@@ -149,7 +149,7 @@
       <form method="post" action="/deals/{{ r.id }}/status" class="decide">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <button class="btn btn-primary" name="action" value="taken" type="submit">Беру в работу</button>
-        <p class="hint">Вы готовите КП. Плагин перестаёт напоминать о сделке, в отчёте статус «беру».</p>
+        <p class="hint">Робот сразу собирает КП по разбору — аналоги, позиции вне каталога и пустые цены тоже — и кладёт в блок «Коммерческое предложение». Вы проверяете цены и подаёте. Напоминания о сделке прекращаются, статус «беру».</p>
         <button class="btn btn-quiet" name="action" value="submitted" type="submit">КП подано</button>
         <p class="hint">КП отправлено заказчику на площадке. Статус «подано» — по нему видно, сколько КП подано за период.</p>
       </form>
@@ -180,8 +180,10 @@
         {% for f in card.kp_files %}<li><a href="/deals/{{ r.id }}/files/{{ f.id }}">{{ f.name }}</a> <span class="muted">{{ f.size_kb }} КБ</span></li>{% endfor %}
       </ul>
       <p class="muted">Цены по каталогу на сегодня, подтверждает менеджер. Подпись и печать ставятся вручную.</p>
+      {% elif r.status.value == 'taken' %}
+      <p>Робот собирает КП — обновите страницу через минуту.</p>
       {% else %}
-      <p>КП не собрано.</p>
+      <p>КП не собрано автоматически: сделка подходит не на 100%. Нажмите «Беру в работу» — робот соберёт КП с аналогами и пустыми ценами там, где их нет в каталоге.</p>
       {% if card.kp_blockers %}<ul class="why">{% for b in card.kp_blockers %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
       {% endif %}
     </section>

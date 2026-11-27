@@ -89,3 +89,44 @@ def test_render_all_blank_total_not_zero(tmp_path: Path) -> None:
     total = Document(str(render_docx(draft, tmp_path / "kp.docx"))).tables[1].rows[2].cells
     assert total[4].text == "" and total[5].text == ""  # не «0,00» и не «Без НДС»
     assert BLANK_FILL in total[4]._tc.xml and BLANK_FILL in total[5]._tc.xml
+
+
+def test_draft_on_request_keeps_analog_and_missing_positions() -> None:
+    """«Беру в работу»: КП нужен и при аналоге, и при позиции вне каталога — с пустой ценой."""
+    analog = analysis_args()["positions"][0] | {"match": "analog"}
+    missing = analysis_args()["positions"][0] | {
+        "name": "СЗИ Secret Net",
+        "match": "none",
+        "catalog_item_id": None,
+        "qty": None,
+    }
+    draft = build_draft(
+        make_deal(),
+        analysis(positions=[analog, missing]),
+        {501: catalog_item()},
+        KP,
+        NOW.date(),
+        on_request=True,
+    )
+    first, second = draft.lines
+    assert first.sku == "KL4863RAQFS" and first.unit_price == Decimal("2100")
+    assert (
+        second.sku == "" and second.name == "СЗИ Secret Net" and second.qty == 1 and second.unit_price is None
+    )
+
+
+def test_draft_counts_packs_and_blanks_band_price() -> None:
+    pack = catalog_item()
+    pack.name = "Dr.Web Комплексная защита на 1 год на 30 ПК"
+    band = catalog_item(502)
+    band.name = "KES для бизнеса Расширенный продление на 1 год по количеству узлов"
+    pos = analysis_args()["positions"][0]
+    draft = build_draft(
+        make_deal(),
+        analysis(positions=[pos | {"qty": 45}, pos | {"catalog_item_id": 502, "qty": 34}]),
+        {501: pack, 502: band},
+        KP,
+        NOW.date(),
+    )
+    assert draft.lines[0].qty == 2 and draft.lines[0].amount == Decimal("4200.00")  # 45 мест = 2 пакета по 30
+    assert draft.lines[1].qty == 34 and draft.lines[1].unit_price is None

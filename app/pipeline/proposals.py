@@ -1,4 +1,4 @@
-"""Шаг «КП»: для разобранных сделок, подходящих на 100%, собрать DOCX и запись proposal.
+"""Шаг «КП»: для сделок, подходящих на 100%, и по «Беру в работу» — собрать DOCX и запись proposal.
 
 Без токенов: только сохранённый разбор агента, каталог и rules.yaml.
 Позиции не менялись → файл не пересобираем.
@@ -34,12 +34,29 @@ class ProposalRun:
     paths: list[str] = field(default_factory=list)
 
 
-def make_proposals(session: Session, rules: Rules, now: datetime, root: Path = FILES_DIR) -> ProposalRun:
+KP_REQUESTED = "kp_requested"  # ключ в score_breakdown: менеджер нажал «Беру в работу»
+
+
+def request_kp(deal: Deal) -> None:
+    deal.score_breakdown = {**deal.score_breakdown, KP_REQUESTED: True}
+
+
+def kp_requested(deal: Deal) -> bool:
+    return bool(deal.score_breakdown.get(KP_REQUESTED))
+
+
+def make_proposals(
+    session: Session, rules: Rules, now: datetime, root: Path = FILES_DIR, only_requested: bool = False
+) -> ProposalRun:
     run = ProposalRun()
     codes = dict(session.execute(select(Platform.id, Platform.code)).tuples().all())
-    deals = session.scalars(select(Deal).where(Deal.status.in_(ANALYZED))).all()
+    statuses = (*ANALYZED, DealStatus.TAKEN)
+    deals = session.scalars(select(Deal).where(Deal.status.in_(statuses))).all()
     for deal in deals:
-        if deal.status is DealStatus.EXPIRED:
+        requested = kp_requested(deal)
+        if only_requested and not requested:
+            continue
+        if deal.status is DealStatus.TAKEN and not requested:
             continue
         raw = (deal.score_breakdown.get("analysis") or {}).get("result")
         if raw is None:
@@ -49,10 +66,10 @@ def make_proposals(session: Session, rules: Rules, now: datetime, root: Path = F
         result = evaluate(deal_view(deal), analysis, items, rules, now)
         why_not = blockers(deal, analysis, result, items)
         deal.score_breakdown = {**deal.score_breakdown, "kp_blockers": why_not}
-        if why_not:
+        if why_not and not requested:
             run.not_eligible += 1
             continue
-        draft = build_draft(deal, analysis, items, rules.profile.kp, now.date())
+        draft = build_draft(deal, analysis, items, rules.profile.kp, now.date(), on_request=requested)
         last = session.scalar(
             select(Proposal).where(Proposal.deal_id == deal.id).order_by(Proposal.version.desc()).limit(1)
         )

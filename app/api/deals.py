@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import require_user
 from app.db.models import Deal, DealStatus, Feedback
 from app.db.session import get_session
+from app.pipeline.proposals import request_kp
 from app.report.excel import MSK, build_report, day_period
 from app.scoring.rules import RulesError
 from app.scoring.store import active_rules
@@ -60,6 +61,8 @@ def apply_status(
     if action is DealStatus.SKIPPED and not reason:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Напишите, почему не берёте сделку")
     deal.status = action
+    if action is DealStatus.TAKEN:
+        request_kp(deal)  # воркер соберёт КП по разбору в течение ~10 с, даже если сделка не на 100%
     session.add(Feedback(deal_id=deal.id, manager_id=manager_id, action=action, reason=reason or None))
     session.commit()
     return deal
