@@ -15,7 +15,8 @@ from app.api.auth import require_user
 from app.db.models import Deal, DealStatus, Feedback
 from app.db.session import get_session
 from app.report.excel import MSK, build_report
-from app.scoring.rules import RulesError, load_rules
+from app.scoring.rules import RulesError
+from app.scoring.store import active_rules
 from app.web.view import (
     ACTION_RU,
     MANAGER_ACTIONS,
@@ -54,10 +55,10 @@ def apply_status(
 ) -> Deal:
     """Решение менеджера со стенда, из плагина или письма: статус сделки + запись в feedback."""
     if action not in MANAGER_ACTIONS:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Такого статуса нет")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Такого статуса нет")
     reason = reason.strip()
     if action is DealStatus.SKIPPED and not reason:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Напишите, почему не берёте сделку")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Напишите, почему не берёте сделку")
     deal.status = action
     session.add(Feedback(deal_id=deal.id, manager_id=manager_id, action=action, reason=reason or None))
     session.commit()
@@ -138,7 +139,8 @@ def export(
     now = datetime.now(UTC)
     day = since or now.astimezone(MSK).date()
     try:
-        rules = load_rules()
+        rules = active_rules(session)
+        session.commit()
     except (RulesError, ValueError, OSError) as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Файл правил не читается") from exc
     data, _ = build_report(session, rules, now, datetime.combine(day, time.min, MSK))

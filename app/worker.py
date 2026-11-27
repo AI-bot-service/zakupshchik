@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 import structlog
 from apscheduler.schedulers.blocking import BlockingScheduler
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.adapters.config import PlatformConfig, load_platforms
@@ -23,10 +24,11 @@ from app.core.logging import configure_logging
 from app.core.settings import Settings
 from app.db.session import make_engine, make_session_factory
 from app.notify.postbox import MailError, PostboxMailer
-from app.pipeline.analysis import Models, rescore, run_analysis
+from app.pipeline.analysis import Models, refresh_explanations, rescore, run_analysis
 from app.pipeline.notify import NotifyRun, daily_report, notify_deals
 from app.pipeline.proposals import make_proposals
-from app.scoring.rules import Rules, RulesError, load_rules
+from app.scoring.rules import Rules, RulesError
+from app.scoring.store import active_rules
 
 log = structlog.get_logger("worker")
 # Сделок на разбор за запуск: ~1 мин на сделку, запуск раз в интервал сбора
@@ -35,11 +37,12 @@ ANALYZE_PER_RUN = int(os.environ.get("ANALYZE_PER_RUN", "4"))
 
 def cycle(factory: sessionmaker[Session], proxy_url: str | None) -> None:
     try:
-        # Правила и площадки перечитываются каждый цикл: правка файла действует без перезапуска
-        rules = load_rules()
+        # Правила (БД, «Админка») и площадки читаются каждый цикл: правка действует без перезапуска
+        with factory.begin() as session:
+            rules = active_rules(session)
         vendors = load_vendors(VENDORS_FILE)
         platforms = load_platforms(PLATFORMS_FILE)
-    except (RulesError, ValueError, OSError) as exc:
+    except (RulesError, ValueError, OSError, SQLAlchemyError) as exc:
         log.error("cycle_skipped", reason=str(exc)[:500])
         return
     try:
@@ -84,11 +87,12 @@ def notify(
 
 def analyze(factory: sessionmaker[Session], settings: Settings) -> None:
     try:
-        rules = load_rules()
+        with factory.begin() as session:
+            rules = active_rules(session)
         vendors = load_vendors(VENDORS_FILE)
         platforms = load_platforms(PLATFORMS_FILE)
         llm = GatewayLLM(settings.llm_base_url, settings.llm_api_key.get_secret_value())
-    except (RulesError, ValueError, OSError) as exc:
+    except (RulesError, ValueError, OSError, SQLAlchemyError) as exc:
         log.error("analyze_skipped", reason=str(exc)[:500])
         return
     try:
@@ -96,6 +100,9 @@ def analyze(factory: sessionmaker[Session], settings: Settings) -> None:
         with factory.begin() as session:
             stats = rescore(session, rules, now)
         models = Models(settings.llm_model_main, settings.llm_model_cheap)
+        refreshed, refresh_cost = refresh_explanations(factory, llm, models.cheap, rules, now)
+        if refreshed:
+            log.info("explanations_refreshed", deals=refreshed, cost_rub=str(refresh_cost))
         with Fetcher(settings.proxy_url) as fetcher:
             run = run_analysis(factory, fetcher, platforms, vendors, rules, llm, models, now, ANALYZE_PER_RUN)
         with factory.begin() as session:

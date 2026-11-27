@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Правила робота · Закупщик{% endblock %}
+{% macro field(f) %}
+{% set v = values.get(f.name, '') %}
+<div class="rule{{ ' has-error' if error_field == f.name }}">
+  <label for="{{ f.name }}">{{ f.label }}</label>
+  {% if f.kind.value == 'lines' %}
+  <textarea id="{{ f.name }}" name="{{ f.name }}" rows="{{ [v.count('\n') + 1, 4] | max if v else 4 }}" spellcheck="false">{{ v }}</textarea>
+  {% elif f.kind.value == 'bool' %}
+  <label class="check-line"><input type="checkbox" id="{{ f.name }}" name="{{ f.name }}" {{ 'checked' if v in ('on', 'True') }}> да</label>
+  {% else %}
+  <span class="input-unit">
+    <input id="{{ f.name }}" name="{{ f.name }}" value="{{ v }}" required
+      {% if f.kind.value == 'number' %}type="number" step="{{ f.step }}" min="0" inputmode="decimal"{% elif f.kind.value == 'time' %}type="time"{% else %}type="text" maxlength="100"{% endif %}>
+    {% if f.unit %}<span class="muted">{{ f.unit }}</span>{% endif %}
+  </span>
+  {% endif %}
+  {% if f.hint %}<p class="muted hint">{{ f.hint }}</p>{% endif %}
+</div>
+{% endmacro %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Правила робота</h1>
+    <p class="muted">Что робот отсеивает, как считает «N из 5» и приоритет, что пишет в КП и когда уведомляет. Сохранение создаёт новую версию, прежние остаются в истории.</p>
+  </div>
+  <p class="version-chip">версия <b>{{ version }}</b></p>
+</div>
+
+{% if saved == 'same' %}
+<p class="saved" role="status">Изменений нет — версия прежняя.</p>
+{% elif saved %}
+<p class="saved" role="status">Сохранено, версия {{ saved }}. «N из 5» пересчитано у {{ rescored }} сделок, изменилось у {{ changed }}. Отсев с новыми правилами — в следующем цикле сбора, до 5 минут.</p>
+{% endif %}
+{% if error %}<p class="alert" role="alert">Не сохранено. {{ error }}</p>{% endif %}
+
+<div class="admin-grid">
+  <form method="post" action="/admin/rules" class="rules-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% for g in groups %}
+    <section class="sheet rule-group">
+      <h2>{{ g.title }}</h2>
+      <p class="muted">{{ g.hint }}</p>
+      {% for f in g.fields[:2] %}{{ field(f) }}{% endfor %}
+      {% if g.procedures %}
+      <fieldset class="rule{{ ' has-error' if error_field and error_field.startswith('filters__procedures') }}">
+        <legend>Способы закупки</legend>
+        <table class="procs">
+          <thead><tr><th>Способ</th>{% for key, title in proc_choices %}<th>{{ title }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for code, name in procedures %}
+            <tr>
+              <th scope="row">{{ name }}</th>
+              {% for key, title in proc_choices %}
+              <td><input type="radio" name="proc__{{ code }}" value="{{ key }}" aria-label="{{ name }}: {{ title }}" {{ 'checked' if values.get('proc__' ~ code) == key }}></td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="muted hint">Конкурсы и аукционы Софтлайн не берёт: только быстрые сделки.</p>
+      </fieldset>
+      {% endif %}
+      {% for f in g.fields[2:] %}{{ field(f) }}{% endfor %}
+    </section>
+    {% endfor %}
+    <div class="save-bar">
+      <div class="field">
+        <label for="note">Что и зачем меняли</label>
+        <input id="note" name="note" maxlength="500" value="{{ note }}" placeholder="Например: подняли потолок до 2 млн по просьбе отдела">
+      </div>
+      <button class="btn btn-primary" type="submit">Сохранить правила</button>
+    </div>
+  </form>
+
+  <aside class="sheet side-block history-block">
+    <h2>История версий</h2>
+    <ol class="versions">
+      {% for v in versions %}
+      <li>
+        <div class="v-head"><b>{{ v.version }}</b><span class="muted">{{ v.at }}</span>{% if v.current %}<span class="tag tag-take">действует</span>{% endif %}</div>
+        <p class="muted">{{ v.author }}{% if v.note %}: {{ v.note }}{% endif %}</p>
+        {% if v.changes %}
+        <ul class="changes">
+          {% for name, was, now in v.changes %}<li><b>{{ name }}</b>{% if was %} {{ was }}{% endif %}{% if was and now %} →{% endif %}{% if now %} {{ now }}{% endif %}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if not v.current %}
+        <form method="post" action="/admin/rules/{{ v.id }}/restore">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn btn-quiet" type="submit">Вернуть эту версию</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </aside>
+</div>
+{% endblock %}

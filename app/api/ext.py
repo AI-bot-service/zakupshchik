@@ -22,7 +22,8 @@ from app.api.auth import require_user
 from app.api.deals import apply_status, check_csrf, csrf_token, get_deal
 from app.db.models import DealStatus, Manager
 from app.db.session import get_session
-from app.scoring.rules import RulesError, load_rules
+from app.scoring.rules import RulesError
+from app.scoring.store import active_rules
 from app.web.extension import build_zip
 from app.web.view import View, deal_card, deal_rows, file_path, find_by_url
 
@@ -68,18 +69,20 @@ def require_manager(session: Db, authorization: Annotated[str, Header()] = "") -
 Mgr = Annotated[Manager, Depends(require_manager)]
 
 
-def _notify_min() -> int:
+def _notify_min(session: Session) -> int:
     try:
-        return load_rules().profile.notify.min_conditions
+        min_n = active_rules(session).profile.notify.min_conditions
+        session.commit()
+        return min_n
     except (RulesError, ValueError, OSError):
         return 5
 
 
 @router.get("/inbox")
 def inbox(session: Db, manager: Mgr) -> dict[str, Any]:
-    """Сделки с открытым приёмом КП. `notify` — порог уведомления из rules.yaml, решённые не уведомляем."""
+    """Сделки с открытым приёмом КП. `notify` — порог из действующих правил, решённые не уведомляем."""
     now = datetime.now(UTC)
-    min_n = _notify_min()
+    min_n = _notify_min(session)
     rows = deal_rows(session, View.OPEN, now)
     done = (DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
     return {
@@ -125,11 +128,11 @@ def decide(deal_id: int, body: Decision, session: Db, manager: Mgr) -> dict[str,
 
 
 @pages.get("/extension", response_class=HTMLResponse)
-def extension_page(request: Request, user: User) -> HTMLResponse:
+def extension_page(request: Request, user: User, session: Db) -> HTMLResponse:
     return request.app.state.templates.TemplateResponse(  # type: ignore[no-any-return]
         request,
         "extension.html",
-        {"user": user, "csrf": csrf_token(request), "key": None, "notify_min": _notify_min()},
+        {"user": user, "csrf": csrf_token(request), "key": None, "notify_min": _notify_min(session)},
     )
 
 
@@ -142,7 +145,7 @@ def extension_key(
     response: HTMLResponse = request.app.state.templates.TemplateResponse(
         request,
         "extension.html",
-        {"user": user, "csrf": csrf_token(request), "key": key, "notify_min": _notify_min()},
+        {"user": user, "csrf": csrf_token(request), "key": key, "notify_min": _notify_min(session)},
     )
     response.headers["Cache-Control"] = "no-store"
     return response

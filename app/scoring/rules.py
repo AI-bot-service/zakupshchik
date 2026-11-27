@@ -1,12 +1,15 @@
-"""Профиль правил из config/rules.yaml: схема без выражений и кода, версия = хэш файла."""
+"""Профиль правил: схема без выражений и кода. Действующие правила — в БД (вкладка «Админка»),
+config/rules.yaml — исходные значения для первой версии. Версия = хэш содержимого и версии логики."""
 
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from datetime import time
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -98,15 +101,63 @@ def word_pattern(words: list[str]) -> re.Pattern[str]:
     return re.compile("|".join(parts) or r"(?!x)x", re.IGNORECASE)
 
 
-def load_rules(path: Path = RULES_FILE) -> Rules:
-    raw = path.read_bytes()
+_RU = {
+    "greater_than": "должно быть больше {gt}",
+    "greater_than_equal": "должно быть не меньше {ge}",
+    "less_than_equal": "должно быть не больше {le}",
+    "int_parsing": "нужно целое число",
+    "int_from_float": "нужно целое число",
+    "float_parsing": "нужно число",
+    "decimal_parsing": "нужно число",
+    "time_parsing": "нужно время в виде ЧЧ:ММ",
+    "string_too_short": "слишком коротко",
+    "string_too_long": "слишком длинно",
+    "too_short": "нужно хотя бы одно значение",
+    "enum": "неизвестное значение",
+    "missing": "не заполнено",
+}
+
+
+class RulesFieldError(RulesError):
+    """Ошибка в правилах с адресом поля (filters.max_nmck_rub) и текстом по-русски."""
+
+    def __init__(self, source: str, field: str, message: str) -> None:
+        super().__init__(f"{source}, поле {field}: {message}")
+        self.field = field
+        self.message = message
+
+
+def _field_error(exc: ValidationError, source: str) -> RulesFieldError:
+    first = exc.errors()[0]
+    where = ".".join(str(p) for p in first["loc"] if not isinstance(p, int))
+    if first["type"] == "value_error":
+        message = str(first["msg"]).removeprefix("Value error, ")
+    else:
+        template = _RU.get(first["type"])
+        message = template.format(**first.get("ctx", {})) if template else str(first["msg"])
+    return RulesFieldError(source, where, message)
+
+
+def parse_profile(data: Any, source: str = "правила") -> RuleProfile:  # noqa: ANN401 — сырые данные YAML/JSON
     try:
-        profile = RuleProfile.model_validate(yaml.safe_load(raw))
+        profile = RuleProfile.model_validate(data)
     except ValidationError as exc:
-        first = exc.errors()[0]
-        where = ".".join(str(p) for p in first["loc"])
-        raise RulesError(f"rules.yaml, поле {where}: {first['msg']}") from exc
+        raise _field_error(exc, source) from exc
     overlap = set(profile.filters.procedures_take) & set(profile.filters.procedures_cut)
     if overlap:
-        raise RulesError(f"rules.yaml: способ одновременно берём и отсекаем: {sorted(overlap)}")
-    return Rules(profile, hashlib.sha256(LOGIC_VERSION + raw).hexdigest()[:12])
+        raise RulesError(f"{source}: способ одновременно берём и отсекаем: {sorted(overlap)}")
+    return profile
+
+
+def profile_version(profile: RuleProfile) -> str:
+    canonical = json.dumps(profile.model_dump(mode="json"), sort_keys=True, ensure_ascii=False).encode()
+    return hashlib.sha256(LOGIC_VERSION + canonical).hexdigest()[:12]
+
+
+def make_rules(profile: RuleProfile) -> Rules:
+    return Rules(profile, profile_version(profile))
+
+
+def load_rules(path: Path = RULES_FILE) -> Rules:
+    """Правила из файла: исходные значения и тесты. В работе — app.scoring.store.active_rules."""
+    return make_rules(parse_profile(yaml.safe_load(path.read_bytes()), path.name))

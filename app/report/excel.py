@@ -285,7 +285,7 @@ def _how(ws: Worksheet, rules: Rules) -> None:
     f, c, w, kp = p.filters, p.conditions, p.weights, p.kp
     lines = [
         ("Версия правил", rules.version),
-        ("Файл правил", "config/rules.yaml — правится без кода, применяется в следующем цикле"),
+        ("Где правятся", "Стенд → «Админка»: каждое сохранение — новая версия с историей и откатом"),
         ("", ""),
         ("Отсев (лист «Исключённые»)", ""),
         ("НМЦ", f"до {f.max_nmck_rub:,.0f} ₽".replace(",", " ")),

@@ -251,10 +251,43 @@ def rescore(session: Session, rules: Rules, now: datetime) -> dict[str, int]:
         stats["rescored"] += 1
         if (deal.conditions_met, deal.status) != before:
             stats["changed"] += 1
-            # Текст модели писался под прежний итог — заменяем текстом из условий
+            # Текст модели писался под прежний итог: до нового текста модели — текст из условий, «устарело»
             expl: Explanation = fallback(result)
+            deal.score_breakdown = {
+                **deal.score_breakdown,
+                "explanation": {**expl.model_dump(), "n": result.n, "stale": True},
+            }
+    return stats
+
+
+def refresh_explanations(
+    factory: sessionmaker[Session], llm: LLM, model: str, rules: Rules, now: datetime, limit: int = 10
+) -> tuple[int, Decimal]:
+    """Новый текст «почему» дешёвой моделью там, где правила изменили итог. Только открытые сделки."""
+    run_id = str(uuid.uuid4())
+    prompt = load_prompt("explain")
+    with factory() as session:
+        ids = [
+            d.id
+            for d in session.scalars(select(Deal).where(Deal.status.in_(ANALYZED), Deal.end_at > now))
+            if (d.score_breakdown.get("explanation") or {}).get("stale")
+        ][:limit]
+    done, cost = 0, Decimal(0)
+    for deal_id in ids:
+        with factory.begin() as session:
+            deal = session.get_one(Deal, deal_id)
+            raw = (deal.score_breakdown.get("analysis") or {}).get("result")
+            if raw is None:
+                continue
+            analysis = Analysis.model_validate(raw)
+            items = catalog_items(session, analysis)
+            result = evaluate(deal_view(deal), analysis, items, rules, now)
+            journal = Journal(factory, run_id, deal.id)
+            expl = explain(llm, model, explain_facts(deal, analysis, result, items), result, journal, prompt)
             deal.score_breakdown = {
                 **deal.score_breakdown,
                 "explanation": {**expl.model_dump(), "n": result.n},
             }
-    return stats
+            done += 1
+            cost += sum((Decimal(str(st["cost_rub"])) for st in journal.steps), Decimal(0))
+    return done, cost

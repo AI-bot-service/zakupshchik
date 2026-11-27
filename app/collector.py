@@ -23,7 +23,8 @@ from app.db.models import AgentStep
 from app.pipeline.details import load_details
 from app.pipeline.ingest import mark_platform, save_deals, sync_platforms
 from app.pipeline.prefilter import run_prefilter
-from app.scoring.rules import Rules, load_rules
+from app.scoring.rules import Rules
+from app.scoring.store import active_rules
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 PLATFORMS_FILE = CONFIG_DIR / "platforms.yaml"
@@ -145,7 +146,9 @@ def main(argv: list[str]) -> int:
     settings = Settings()  # значения из окружения
     configure_logging(settings.debug)
     factory = make_session_factory(make_engine(settings.database_url.encoded_string()))
-    rules, vendors = load_rules(), load_vendors(VENDORS_FILE)
+    with factory.begin() as session:
+        rules = active_rules(session)
+    vendors = load_vendors(VENDORS_FILE)
     with Fetcher(settings.proxy_url) as fetcher:
         platforms = load_platforms(PLATFORMS_FILE)
         runs, stats = run_cycle(factory, fetcher, platforms, rules, vendors, set(argv) or None)

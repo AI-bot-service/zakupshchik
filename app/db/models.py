@@ -366,3 +366,16 @@ class Notification(Timestamps, Base):
     status: Mapped[NotifyStatus] = mapped_column(_enum(NotifyStatus), default=NotifyStatus.PENDING)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
+
+
+class RulesVersion(Base):
+    """Версия правил отбора и оценки. Только добавление: действует последняя, откат = копия старой."""
+
+    __tablename__ = "rules_version"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(String(12), index=True)
+    profile: Mapped[dict[str, Any]] = mapped_column()
+    author: Mapped[str] = mapped_column(String(255))
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

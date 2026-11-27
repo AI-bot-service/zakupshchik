@@ -237,6 +237,7 @@ class DealCard:
     conditions: list[dict[str, Any]]
     why: list[str]
     check: str | None
+    why_stale: bool
     findings: list[str]
     missing: list[str]
     positions: list[PositionView]
@@ -405,6 +406,7 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
         conditions=list(score.get("conditions") or []),
         why=list(expl.get("why") or []),
         check=expl.get("check"),
+        why_stale=bool(expl.get("stale")),
         findings=findings,
         missing=[m for m in (analysis.missing if analysis else []) if m not in findings],
         positions=positions,
