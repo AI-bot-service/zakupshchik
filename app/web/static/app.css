@@ -350,6 +350,7 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
 /* ── Плагин ─────────────────────────────────────────────────────────────── */
 .ext-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--sp-6); align-items: start; }
 .ext-grid .panel form { margin: 0; }
+.ext-main { min-width: 0; }
 .copy-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: var(--sp-2) 0; }
 .copy-field { display: flex; gap: var(--sp-2); min-width: 0; }
 .copy-field input { flex: 1 1 0; width: auto; min-width: 0; font-family: ui-monospace, monospace; }
