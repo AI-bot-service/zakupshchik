@@ -30,9 +30,9 @@ platforms:
     fields:
       external_id: "{id}"
       url:
-        - "https://zakupki.mos.ru/need/view?needId={needId}"
-        - "https://zakupki.mos.ru/auction/view?auctionId={auctionId}"
-        - "https://zakupki.mos.ru/tender/view?tenderId={tenderId}"
+        - "https://zakupki.mos.ru/need/{needId}"
+        - "https://zakupki.mos.ru/auction/{auctionId}"
+        - "https://zakupki.mos.ru/tender/{tenderId}"
       title: name
       customer_name: customers.0.name
       customer_inn: customers.0.inn

@@ -28,7 +28,7 @@ def test_mos_portal_contract() -> None:
     result = parse(fixture("mos_portal_query.json"), CONFIGS["mos_portal"])
     assert len(result.deals) == 6 and result.skipped == 0
     need = next(d for d in result.deals if d.external_id == "Need6322887")
-    assert need.url == "https://zakupki.mos.ru/need/view?needId=6322887"
+    assert need.url == "https://zakupki.mos.ru/need/6322887"
     assert need.procedure is Procedure.SINGLE_SUPPLIER
     assert need.law is Law.FZ44
     assert need.nmck == Decimal("23400.00")
@@ -36,7 +36,7 @@ def test_mos_portal_contract() -> None:
     assert need.customer_inn == "7124500810"
     auction = next(d for d in result.deals if d.external_id == "Auction10355601")
     assert auction.procedure is Procedure.QUOTATION_SESSION
-    assert auction.url.endswith("auctionId=10355601")
+    assert auction.url == "https://zakupki.mos.ru/auction/10355601"
     assert set(need.raw_masked) <= set(CONFIGS["mos_portal"].keep_raw)
 
 
