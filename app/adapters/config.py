@@ -75,6 +75,8 @@ class PlatformConfig(BaseModel):
     name: str
     kind: ExtractKind
     url: str = Field(pattern=r"^https://")
+    # Адрес для людей, если url — служебный API
+    site_url: str | None = Field(default=None, pattern=r"^https://")
     enabled: bool = True
     min_interval_s: float = Field(default=4, ge=1)
     # Коды ответа, которые площадка отдаёт эпизодически на исправный запрос: повторить, а не считать ошибкой
@@ -96,17 +98,37 @@ class PlatformConfig(BaseModel):
     details: DetailsConfig | None = None
 
 
+class BrowserPlatformConfig(BaseModel):
+    """Закрытая площадка: вход поставщика или капча. Опрашивает плагин в браузере менеджера под его учёткой,
+    сервер логины и пароли площадок не хранит."""
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    code: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
+    name: str
+    url: str = Field(pattern=r"^https://")
+    # Страница поиска закупок, которую плагин открывает под учёткой менеджера
+    search_url: str = Field(pattern=r"^https://")
+    enabled: bool = False
+    note: str = ""
+
+
 class PlatformsFile(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
     platforms: list[PlatformConfig]
+    browser_platforms: list[BrowserPlatformConfig] = Field(default_factory=list)
 
 
-def load_platforms(path: Path) -> list[PlatformConfig]:
+def load_registry(path: Path) -> PlatformsFile:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     # strict=False только здесь: YAML отдаёт строки там, где ждём StrEnum
     parsed = PlatformsFile.model_validate(data, strict=False)
-    codes = [p.code for p in parsed.platforms]
+    codes = [p.code for p in parsed.platforms] + [p.code for p in parsed.browser_platforms]
     if len(codes) != len(set(codes)):
         raise ValueError("platforms.yaml: коды площадок повторяются")
-    return parsed.platforms
+    return parsed
+
+
+def load_platforms(path: Path) -> list[PlatformConfig]:
+    return load_registry(path).platforms

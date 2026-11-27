@@ -581,3 +581,22 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
 .demo-form { display: grid; grid-template-columns: 10rem 17rem max-content; gap: var(--sp-3); align-items: end; justify-content: start; }
 .demo-form input { width: 100%; box-sizing: border-box; }
 @media (max-width: 720px) { .demo-form { grid-template-columns: 1fr; } }
+
+/* ── Площадки ───────────────────────────────────────────────────────────── */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.platforms td:first-child { width: 44px; }
+.platforms label { cursor: pointer; }
+.platforms .hint { margin: var(--sp-1) 0 0; max-width: 48ch; }
+.platform-check { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--c-stamp); cursor: pointer; }
+.platforms tr.is-off td:not(:first-child) { opacity: 0.55; }
+.platforms .is-down { color: var(--c-down); }
+.platforms a { overflow-wrap: anywhere; }
+.platforms-save {
+  display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--c-rule); background: var(--c-sheet); border-radius: 0 0 var(--radius) var(--radius);
+}
+.platforms-save p { margin: 0; font-size: var(--fs-sm); }
+@media (max-width: 640px) {
+  .platforms th:nth-child(n+4), .platforms td:nth-child(n+4) { display: none; }
+  .platforms .hint { display: none; }
+}

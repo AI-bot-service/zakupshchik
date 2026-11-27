@@ -10,9 +10,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.dml import ReturningInsert
 
-from app.adapters.config import PlatformConfig
+from app.adapters.config import BrowserPlatformConfig, PlatformConfig
 from app.adapters.normalize import DealData
-from app.db.models import Deal, Platform, PlatformId, PlatformStatus
+from app.db.models import AdapterKind, Deal, Platform, PlatformId, PlatformStatus
 
 # Поля, которые площадка может поменять после публикации (продлили срок, уточнили НМЦ).
 # Статус, оценку и решения менеджера повторный сбор не трогает.
@@ -37,14 +37,27 @@ class IngestResult:
     updated: int
 
 
-def sync_platforms(session: Session, configs: list[PlatformConfig]) -> dict[str, PlatformId]:
-    for cfg in configs:
+def sync_platforms(
+    session: Session,
+    configs: list[PlatformConfig],
+    browser: list[BrowserPlatformConfig] | None = None,
+) -> dict[str, PlatformId]:
+    """Реестр площадок из platforms.yaml в БД. enabled из файла — только для новой площадки:
+    дальше галочку ставит менеджер на странице «Площадки», повторный сбор её не сбрасывает."""
+    rows_in: list[tuple[str, str, AdapterKind, dict[str, object], bool]] = [
+        (c.code, c.name, c.kind.adapter_kind, {**c.model_dump(mode="json"), "access": "free"}, c.enabled)
+        for c in configs
+    ] + [
+        (b.code, b.name, AdapterKind.EXTENSION, {**b.model_dump(mode="json"), "access": "auth"}, b.enabled)
+        for b in browser or []
+    ]
+    for code, name, kind, config, enabled in rows_in:
         stmt = insert(Platform).values(
-            code=cfg.code,
-            name=cfg.name,
-            adapter_kind=cfg.kind.adapter_kind,
-            config=cfg.model_dump(mode="json"),
-            status=PlatformStatus.ON if cfg.enabled else PlatformStatus.OFF,
+            code=code,
+            name=name,
+            adapter_kind=kind,
+            config=config,
+            status=PlatformStatus.ON if enabled else PlatformStatus.OFF,
         )
         session.execute(
             stmt.on_conflict_do_update(
@@ -53,13 +66,16 @@ def sync_platforms(session: Session, configs: list[PlatformConfig]) -> dict[str,
                     "name": stmt.excluded.name,
                     "adapter_kind": stmt.excluded.adapter_kind,
                     "config": stmt.excluded.config,
-                    "status": stmt.excluded.status,
                     "updated_at": func.now(),
                 },
             )
         )
     rows = session.execute(select(Platform.code, Platform.id)).all()
     return {code: PlatformId(pid) for code, pid in rows}
+
+
+def enabled_codes(session: Session) -> set[str]:
+    return set(session.scalars(select(Platform.code).where(Platform.status == PlatformStatus.ON)))
 
 
 def mark_platform(session: Session, platform_id: PlatformId, error: str | None) -> None:

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Площадки · Закупщик{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Площадки</h1>
+    <p class="muted">Отметьте, какие площадки опрашивает робот. Открытые сервер обходит сам каждые 5 минут. Закрытые требуют входа поставщика или проходят только через браузер — их опрашивает плагин в вашем браузере под вашей учёткой. Логины и пароли площадок робот не получает и не хранит.</p>
+  </div>
+  <p class="version-chip">опрашивается <b>{{ on_free + on_auth }}</b> из {{ rows | length }}</p>
+</div>
+
+{% if saved %}
+<p class="saved" role="status">{% if saved == '0' %}Ничего не изменилось.{% else %}Сохранено. Следующий обход робота пойдёт по отмеченным площадкам.{% endif %}</p>
+{% endif %}
+
+<form method="post" action="/platforms" class="panel flush platforms-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="table-wrap">
+    <table class="journal platforms">
+      <thead>
+        <tr><th scope="col"><span class="sr-only">Опрашивать</span></th><th scope="col">Площадка</th><th scope="col">Доступ</th><th scope="col">Кто опрашивает</th><th scope="col">Сделок</th><th scope="col">Последний сбор</th></tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="{{ 'is-off' if not r.on }}">
+          <td><input class="platform-check" type="checkbox" name="on" value="{{ r.code }}" id="p-{{ r.code }}" {{ 'checked' if r.on }}></td>
+          <td>
+            <label for="p-{{ r.code }}"><b>{{ r.name }}</b></label><br>
+            <a class="muted" href="{{ r.url }}" target="_blank" rel="noopener noreferrer">{{ r.url | replace('https://', '') }}</a>
+            {% if r.note %}<p class="muted hint">{{ r.note }}</p>{% endif %}
+          </td>
+          <td>{% if r.auth %}<span class="stamp stamp-mini stamp-decide">Авторизация</span>{% else %}<span class="stamp stamp-mini stamp-ok">Free</span>{% endif %}</td>
+          <td>{% if r.auth %}Плагин, под учёткой менеджера{% else %}Сервер робота, без входа{% endif %}</td>
+          <td>{% if r.total %}{{ r.total }}<br><span class="muted">открыто {{ r.open }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>
+            {% if r.last_error %}<span class="is-down">ошибка: {{ r.last_error | truncate(120) }}</span>
+            {% elif r.last_ok_at %}{{ r.last_ok_at | msk }}
+            {% elif r.auth %}<span class="muted">плагин ещё не присылал</span>
+            {% else %}<span class="muted">ещё не обходил</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="platforms-save">
+    <p class="muted">Free — {{ on_free }} отмечено, авторизация — {{ on_auth }}. Снятая галочка не удаляет найденные сделки.</p>
+    <button class="btn btn-primary" type="submit">Сохранить список</button>
+  </div>
+</form>
+{% endblock %}

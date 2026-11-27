@@ -11,6 +11,7 @@ platforms:
     name: Портал поставщиков Москвы
     kind: json
     url: https://old.zakupki.mos.ru/api/Cssp/Purchase/Query
+    site_url: https://zakupki.mos.ru/purchase/list
     min_interval_s: 3
     # 27.11: на исправный запрос изредка 400 (5–6 раз за 150 циклов), следующий цикл тот же запрос проходит
     retry_status: [400]
@@ -147,3 +148,33 @@ platforms:
       "Аукцион": auction
       "Редукцион": auction
     keep_raw: [procedureNumber, sectionEnum, blocks]
+
+# Закрытые площадки: без входа поставщика или из-за капчи сервер их не видит (разведка 24–26.11, ploshchadki.md).
+# Опрашивает плагин в браузере менеджера под его учёткой: сервер логины и пароли площадок не хранит.
+# enabled — только начальное значение; дальше галочку ставит менеджер на странице «Площадки».
+browser_platforms:
+  - code: b2b_center
+    name: B2B-Center
+    url: https://www.b2b-center.ru
+    search_url: https://www.b2b-center.ru/market/
+    note: Yandex SmartCaptcha, карточки закупок — после входа поставщика
+  - code: berezka
+    name: ЕАТ «Берёзка»
+    url: https://agregatoreat.ru
+    search_url: https://agregatoreat.ru/purchases/new
+    note: Малые закупки 44-ФЗ; страница за защитой от ботов, подача — из кабинета поставщика
+  - code: rts_market
+    name: РТС-маркет
+    url: https://market.rts-tender.ru
+    search_url: https://market.rts-tender.ru/search/sell
+    note: Anti-DDoS отдаёт 503 запросам без браузера
+  - code: sberbank_utp
+    name: Сбербанк-АСТ — УТП
+    url: https://utp.sberbank-ast.ru
+    search_url: https://utp.sberbank-ast.ru/Trade/List/BidList
+    note: Капча на поиске, часть закупок видна только после входа
+  - code: mosreg_market
+    name: Портал поставщиков Подмосковья
+    url: https://market.mosreg.ru
+    search_url: https://market.mosreg.ru/Trade
+    note: ServicePipe-защита, без браузера не открывается

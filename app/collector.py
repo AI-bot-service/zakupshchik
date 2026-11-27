@@ -21,7 +21,7 @@ from app.adapters.fetch import Fetcher
 from app.catalog.vendors import VendorIndex, load_vendors
 from app.db.models import AgentStep
 from app.pipeline.details import load_details
-from app.pipeline.ingest import mark_platform, save_deals, sync_platforms
+from app.pipeline.ingest import enabled_codes, mark_platform, save_deals, sync_platforms
 from app.pipeline.prefilter import run_prefilter
 from app.scoring.rules import Rules
 from app.scoring.store import active_rules
@@ -57,9 +57,11 @@ def run_cycle(
     run_id = str(uuid.uuid4())
     with session_factory.begin() as session:
         ids = sync_platforms(session, configs)
+        enabled = enabled_codes(session)
     runs: list[PlatformRun] = []
     for cfg in configs:
-        if not cfg.enabled or (only and cfg.code not in only):
+        # Ручной запуск по коду площадки идёт и без галочки; плановый — только отмеченные на «Площадках»
+        if (only and cfg.code not in only) or (not only and cfg.code not in enabled):
             continue
         started = time.monotonic()
         result = collect(cfg, fetcher)

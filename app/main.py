@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api import admin, auth, deals, ext, journal, mail, status
+from app.api import admin, auth, deals, ext, journal, mail, platforms, status
 from app.core.logging import configure_logging
 from app.core.provenance import BUILD_HEADER, BUILD_MARK
 from app.core.settings import Settings
@@ -76,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ext.pages)
     app.include_router(admin.router)
     app.include_router(journal.router)
+    app.include_router(platforms.router)
     app.include_router(mail.router)
 
     @app.get("/")

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.agent.analyze import load_prompt
 from app.api.auth import require_user
 from app.api.deals import apply_status, check_csrf, csrf_token, get_deal
-from app.db.models import Actor, Channel, DealStatus, ExtKey, Manager
+from app.db.models import Actor, AdapterKind, Channel, DealStatus, ExtKey, Manager, Platform, PlatformStatus
 from app.db.session import get_session
 from app.pipeline.status_log import Who
 from app.report.stamps import msk
@@ -134,6 +134,27 @@ def inbox(request: Request, session: Db, manager: Mgr) -> dict[str, Any]:
         "rules": rules_version,
         "checked_at": now.isoformat(),
         "deals": [asdict(r) | {"notify": (r.n or 0) >= min_n and r.status not in done} for r in rows],
+    }
+
+
+@router.get("/platforms")
+def browser_platforms(session: Db, manager: Mgr) -> dict[str, Any]:
+    """Закрытые площадки, отмеченные на стенде: их плагин опрашивает под учёткой менеджера."""
+    rows = session.scalars(
+        select(Platform).where(
+            Platform.adapter_kind == AdapterKind.EXTENSION, Platform.status == PlatformStatus.ON
+        )
+    )
+    return {
+        "platforms": [
+            {
+                "code": p.code,
+                "name": p.name,
+                "url": p.config.get("url"),
+                "search_url": p.config.get("search_url"),
+            }
+            for p in rows
+        ]
     }
 
 
