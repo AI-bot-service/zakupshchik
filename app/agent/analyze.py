@@ -272,6 +272,8 @@ class AgentContext:
     llm: LLM
     model: str
     journal: Journal
+    # Вендоры каталога: продукт другого вендора модель отмечает none без перебора формулировок поиска
+    catalog_vendors: tuple[str, ...] = ()
 
 
 def input_hash(deal: Deal, prompt: Prompt, model: str) -> str:
@@ -351,7 +353,8 @@ class _Run:
         if not hits:
             return (
                 "ничего не найдено: запрос слишком общий или такого продукта нет в каталоге. "
-                "Уточни вендора и продукт (можно из ТЗ) или другое написание."
+                "Уточни вендора и продукт (можно из ТЗ) или другое написание. Продукт вендора не из "
+                "<вендоры_каталога> не ищи дальше — match=none."
             )
         return json.dumps(
             [
@@ -439,6 +442,9 @@ class _Run:
         files = self._preload()
         if files:
             messages[1]["content"] += f"\n<файлы_закупки>\n{files}\n</файлы_закупки>"
+        if self.ctx.catalog_vendors:
+            vendors = "; ".join(self.ctx.catalog_vendors)
+            messages[1]["content"] += f"\n<вендоры_каталога>{vendors}</вендоры_каталога>"
         while self.result.turns < MAX_TURNS:
             if self.result.cost_rub > MAX_COST_RUB:
                 self.result.needs_human = f"бюджет разбора {MAX_COST_RUB} ₽ исчерпан"

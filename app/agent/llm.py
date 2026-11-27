@@ -1,6 +1,7 @@
 """LLM за интерфейсом: шлюз OmniRoute (OpenAI-совместимый) в работе, фейк в тестах.
 
 Повтор с паузой только на сеть, 429 и 5xx; фолбэк между провайдерами делает шлюз (комбо моделей).
+reasoning — глубина рассуждения: на коротком тексте рассуждение съедает ~90% выхода.
 Стоимость — из usage.cost ответа шлюза (Polza считает в ₽); нет поля → 0 и пометка в журнале.
 """
 
@@ -55,6 +56,7 @@ class LLM(Protocol):
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int = 4000,
+        reasoning: str | None = None,
     ) -> LLMReply: ...
 
 
@@ -84,6 +86,7 @@ class GatewayLLM:
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int = 4000,
+        reasoning: str | None = None,
     ) -> LLMReply:
         started = time.monotonic()
         kwargs: dict[str, Any] = {
@@ -94,6 +97,9 @@ class GatewayLLM:
         }
         if tools:
             kwargs["tools"] = tools
+        if reasoning:
+            # Формат OpenRouter, шлюз передаёт как есть; reasoning_effort Gemini игнорирует
+            kwargs["extra_body"] = {"reasoning": {"effort": reasoning}}
         resp = self._client.chat.completions.create(**kwargs)
         choice = resp.choices[0]
         usage = resp.usage

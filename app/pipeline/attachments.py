@@ -99,8 +99,13 @@ def _rtf(data: bytes) -> str:
     return _RTF_CONTROL.sub("", text)
 
 
+def file_ext(name: str) -> str:
+    """Расширение без хвостовых кавычек: площадки отдают имя вида «ТЗ.docx"»."""
+    return Path(name.strip(" \"'«»")).suffix.lower()
+
+
 def extract_text(name: str, data: bytes) -> str:
-    ext = Path(name).suffix.lower()
+    ext = file_ext(name)
     try:
         if ext == ".docx" or (ext == "" and data[:2] == b"PK"):
             text = _docx(data)
@@ -171,7 +176,7 @@ def download_file(
     except httpx.HTTPError as exc:
         raise AttachmentError(f"площадка не отдала файл ({type(exc).__name__})") from exc
     sha = hashlib.sha256(data).hexdigest()
-    ext = Path(meta["name"]).suffix.lower()
+    ext = file_ext(meta["name"])
     path = file_path(root, cfg.code, deal.external_id, n, meta["name"])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)

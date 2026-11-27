@@ -72,7 +72,7 @@ def explain(
     ]
     for attempt in (1, 2):
         try:
-            reply = llm.chat(model, messages, max_tokens=3000)
+            reply = llm.chat(model, messages, max_tokens=1500, reasoning="minimal")
         except Exception as exc:  # объяснение не критично: без него сделка всё равно оценена
             journal.add("explain", error={"code": "llm_failed", "message_ru": type(exc).__name__})
             break

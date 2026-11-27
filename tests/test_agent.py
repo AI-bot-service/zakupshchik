@@ -15,7 +15,7 @@ from app.agent.llm import LLMReply, Message, ToolCall
 from app.agent.schemas import Analysis, analysis_parameters
 from app.catalog.search import CatalogHit
 from app.db.models import CatalogItem, Deal, DealItem, Law, MatchKind, Procedure, TriState
-from app.pipeline.attachments import AttachmentError, AttachmentText, extract_text, file_path
+from app.pipeline.attachments import AttachmentError, AttachmentText, extract_text, file_ext, file_path
 from app.scoring.rules import load_rules
 from app.scoring.score import DealView, evaluate, line_cost
 
@@ -105,6 +105,7 @@ class ScriptedLLM:
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int = 4000,
+        reasoning: str | None = None,
     ) -> LLMReply:
         self.calls.append([dict(m) for m in messages])
         return self.replies.pop(0)
@@ -398,3 +399,8 @@ def test_file_path_by_platform_number_and_order() -> None:
     assert risky.parent.parent.parent == root and "/" not in risky.name and risky.name.startswith("12_")
     long = file_path(root, "p", "1", 3, "а" * 300 + ".docx")
     assert long.name.endswith(".docx") and len(long.name) <= 124
+
+
+def test_file_ext_ignores_trailing_quotes() -> None:
+    assert file_ext('ТЗ.docx"') == ".docx"
+    assert file_ext("«Проект договора.PDF»") == ".pdf"

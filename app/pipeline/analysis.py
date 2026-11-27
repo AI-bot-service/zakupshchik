@@ -197,6 +197,10 @@ def run_analysis(
                 llm=llm,
                 model=models.main,
                 journal=journal,
+                catalog_vendors=tuple(
+                    f"{v.name} ({', '.join(v.products)})" if v.products else v.name
+                    for v in vendors.vendors.values()
+                ),
             )
             try:
                 res = analyze_deal(ctx, deal, prompt)
