@@ -1,5 +1,6 @@
 // Раз в минуту спрашивает стенд о сделках, показывает уведомления о новых выгодных и число на иконке.
 import { api, ApiError } from "./api.js";
+import { onStandBuild } from "./update.js";
 
 const STAMP = "#4338ca";
 const ALARM = "poll";
@@ -47,14 +48,19 @@ async function poll() {
   }
   await chrome.storage.local.set({ inbox, seen: [...known].slice(-500), error: null });
   await badge(hot.length ? String(hot.length) : "");
+  await onStandBuild(inbox.build);
 }
 
 chrome.notifications.onClicked.addListener(async (notificationId) => {
+  chrome.notifications.clear(notificationId);
+  if (notificationId === "update") {
+    const win = await chrome.windows.getLastFocused();
+    return chrome.sidePanel.open({ windowId: win.id }).catch(() => {});
+  }
   const id = Number(notificationId.replace("deal-", ""));
   const { inbox } = await chrome.storage.local.get("inbox");
   const deal = inbox?.deals.find((d) => d.id === id);
   await chrome.storage.local.set({ focus: id });
-  chrome.notifications.clear(notificationId);
   if (!deal) return;
   const tab = await chrome.tabs.create({ url: deal.url });
   try {

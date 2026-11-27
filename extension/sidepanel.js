@@ -1,5 +1,7 @@
 // Боковая панель: настройка ключа, список сделок, разбор закупки из открытой вкладки, КП и решение менеджера.
 import { api, ApiError, cardUrl, getKey } from "./api.js";
+import { BASE } from "./config.js";
+import { canPickFolder, install } from "./update.js";
 
 const root = document.getElementById("root");
 const checked = document.getElementById("checked");
@@ -30,6 +32,43 @@ function show(...nodes) {
 
 function errorBox(message, retry) {
   return h("div", { class: "alert", role: "alert" }, h("p", {}, message), retry && h("button", { class: "btn btn-quiet", type: "button", onclick: retry }, "Повторить"));
+}
+
+// ---------- обновление плагина ----------
+
+const updateBox = document.getElementById("update");
+
+async function renderUpdate() {
+  const { update } = await chrome.storage.local.get("update");
+  updateBox.hidden = !update;
+  if (!update) return;
+  if (!canPickFolder()) {
+    updateBox.replaceChildren(
+      h("p", {}, h("b", {}, "Вышла новая версия плагина."), " Браузер не даёт плагину обновиться самому: скачайте архив, распакуйте поверх старой папки и нажмите «Обновить» на странице chrome://extensions."),
+      h("a", { class: "btn btn-quiet btn-small", href: `${BASE}/extension.zip`, target: "_blank", rel: "noopener noreferrer" }, "Скачать архив"),
+    );
+    return;
+  }
+  const note = h("p", { class: "muted small" }, "В первый раз браузер попросит папку, куда вы распаковали плагин, — дальше обновления ставятся сами.");
+  const btn = h(
+    "button",
+    {
+      class: "btn btn-primary btn-small",
+      type: "button",
+      onclick: async () => {
+        btn.disabled = true;
+        note.textContent = "Обновляем…";
+        try {
+          if (!(await install({ interactive: true }))) note.textContent = "Без доступа к папке обновить не выйдет. Нажмите ещё раз и разрешите.";
+        } catch (e) {
+          note.textContent = e.name === "AbortError" ? "Папку не выбрали. Нажмите ещё раз." : e.message;
+        }
+        btn.disabled = false;
+      },
+    },
+    "Обновить",
+  );
+  updateBox.replaceChildren(h("p", {}, h("b", {}, "Вышла новая версия плагина.")), btn, note);
 }
 
 // ---------- настройка ----------
@@ -318,7 +357,9 @@ refreshBtn.addEventListener("click", refresh);
 chrome.tabs.onActivated.addListener(followTab);
 chrome.tabs.onUpdated.addListener((_id, info, tab) => tab.active && info.url && followTab());
 chrome.storage.onChanged.addListener((changes) => {
+  if (changes.update) renderUpdate();
   if (changes.inbox && current === null) renderList();
   if (changes.focus?.newValue) start();
 });
+renderUpdate();
 start();

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import secrets
 from dataclasses import asdict
@@ -24,7 +25,7 @@ from app.db.models import DealStatus, Manager
 from app.db.session import get_session
 from app.scoring.rules import RulesError
 from app.scoring.store import active_rules
-from app.web.extension import build_zip
+from app.web.extension import build_zip, package
 from app.web.view import View, deal_card, deal_rows, file_path, find_by_url
 
 router = APIRouter(prefix="/api/ext")
@@ -79,7 +80,7 @@ def _notify_min(session: Session) -> int:
 
 
 @router.get("/inbox")
-def inbox(session: Db, manager: Mgr) -> dict[str, Any]:
+def inbox(request: Request, session: Db, manager: Mgr) -> dict[str, Any]:
     """Сделки с открытым приёмом КП. `notify` — порог из действующих правил, решённые не уведомляем."""
     now = datetime.now(UTC)
     min_n = _notify_min(session)
@@ -87,10 +88,19 @@ def inbox(session: Db, manager: Mgr) -> dict[str, Any]:
     done = (DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
     return {
         "manager": manager.name,
+        "build": package(request.app.state.settings.public_url)[0],
         "notify_min": min_n,
         "checked_at": now.isoformat(),
         "deals": [asdict(r) | {"notify": (r.n or 0) >= min_n and r.status not in done} for r in rows],
     }
+
+
+@router.get("/package")
+def extension_package(request: Request, manager: Mgr) -> dict[str, Any]:
+    """Файлы текущей сборки плагина (base64) — плагин перезаписывает ими свою папку и перезапускается."""
+    build, files = package(request.app.state.settings.public_url)
+    log.info("ext_package", manager=manager.name, build=build)
+    return {"build": build, "files": {rel: base64.b64encode(data).decode() for rel, data in files.items()}}
 
 
 @router.get("/deals/{deal_id}")

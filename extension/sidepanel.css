@@ -22,6 +22,11 @@ main { padding: var(--sp-3); display: grid; gap: var(--sp-3); }
 .btn-quiet { background: var(--c-sheet); color: var(--c-ink); border-color: var(--c-rule); }
 .btn-quiet:hover { border-color: var(--c-ink-muted); }
 .link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--c-stamp); cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.btn-small { min-height: 36px; font-size: 0.875rem; }
+.btn:disabled { opacity: 0.6; cursor: progress; }
+.update { display: grid; gap: var(--sp-2); justify-items: start; margin: var(--sp-3) var(--sp-3) 0; padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--c-stamp); border-radius: 0 var(--radius) var(--radius) 0; background: var(--c-stamp-soft); }
+.update[hidden] { display: none; }
+.update p { margin: 0; }
 .back { justify-self: start; }
 
 .alert { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--c-down-soft); color: var(--c-down); font-weight: 600; }

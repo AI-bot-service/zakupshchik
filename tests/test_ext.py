@@ -37,3 +37,20 @@ def test_zip_points_to_stand_and_has_tokens() -> None:
     assert manifest["host_permissions"] == ["https://stand.example/*"]
     assert manifest["manifest_version"] == 3
     assert '"https://stand.example"' in z.read("config.js").decode()
+
+
+def test_package_build_matches_config_and_zip() -> None:
+    from app.web.extension import package
+
+    build, files = package("https://stand.example")
+    assert len(build) == 16
+    assert f'BUILD = "{build}"' in files["config.js"].decode()
+    assert "update.js" in files
+    z = zipfile.ZipFile(io.BytesIO(build_zip("https://stand.example")))
+    assert z.read("config.js") == files["config.js"]
+    assert package("https://other.example")[0] != build
+
+
+def test_package_requires_key() -> None:
+    client = make_client()
+    assert client.get("/api/ext/package").status_code == 401
