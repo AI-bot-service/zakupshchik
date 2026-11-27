@@ -55,6 +55,8 @@ def deal_subject(deal: Deal, analysis: Analysis, now: datetime) -> str:
     end = deal.end_at.astimezone(MSK).strftime("%d.%m %H:%M") if deal.end_at else "срок не указан"
     subject = analysis.subject if len(analysis.subject) <= 60 else analysis.subject[:57] + "…"
     mark = "" if catalog_met(deal.score_breakdown) else "нет в каталоге · "
+    if "demo" in deal.raw_masked:
+        mark = "демо-повтор · " + mark
     return f"{mark}{deal.conditions_met} из 6 · {subject} · {short_rub(deal.nmck)} · подача до {end}"
 
 

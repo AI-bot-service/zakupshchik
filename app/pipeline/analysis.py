@@ -159,13 +159,14 @@ def _save_agent(deal: Deal, res: AgentResult, model: str) -> None:
     }
 
 
-def _candidates(session: Session, rules: Rules, with_details: set[str], limit: int) -> list[Deal]:
+def _candidates(
+    session: Session, rules: Rules, with_details: set[str], limit: int, only: set[int] | None = None
+) -> list[Deal]:
     codes = dict(session.execute(select(Platform.id, Platform.code)).tuples().all())
-    deals = session.scalars(
-        select(Deal)
-        .where(Deal.status == DealStatus.NEW, Deal.rules_version == rules.version)
-        .order_by(Deal.end_at.asc().nulls_last())
-    ).all()
+    where = [Deal.status == DealStatus.NEW, Deal.rules_version == rules.version]
+    if only is not None:
+        where.append(Deal.id.in_(only))
+    deals = session.scalars(select(Deal).where(*where).order_by(Deal.end_at.asc().nulls_last())).all()
     ready = [d for d in deals if codes[d.platform_id] not in with_details or "details" in d.raw_masked]
     return ready[: limit * 3]
 
@@ -180,6 +181,7 @@ def run_analysis(
     models: Models,
     now: datetime,
     limit: int = 5,
+    only: set[int] | None = None,
 ) -> AnalysisRun:
     run = AnalysisRun()
     run_id = str(uuid.uuid4())
@@ -187,7 +189,7 @@ def run_analysis(
     by_code = {c.code: c for c in configs}
     with_details = {c.code for c in configs if c.details is not None}
     with factory() as session:
-        ids = [d.id for d in _candidates(session, rules, with_details, limit)]
+        ids = [d.id for d in _candidates(session, rules, with_details, limit, only)]
     for deal_id in ids:
         if run.analyzed + run.needs_human >= limit:
             break

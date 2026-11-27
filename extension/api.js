@@ -21,7 +21,7 @@ export async function api(path, { method = "GET", body, key } = {}) {
   try {
     resp = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    throw new ApiError(0, "Стенд не ответил. Проверьте интернет, повторим через минуту.");
+    throw new ApiError(0, "Стенд не ответил. Проверьте интернет, повторим через полминуты.");
   }
   if (!resp.ok) {
     let message = `Стенд ответил ошибкой ${resp.status}.`;

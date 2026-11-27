@@ -1,4 +1,4 @@
-// Раз в минуту спрашивает стенд о сделках, показывает уведомления о новых выгодных и число на иконке.
+// Раз в 30 секунд (минимум chrome.alarms) спрашивает стенд о сделках, показывает уведомления о новых выгодных и число на иконке.
 import { api, ApiError } from "./api.js";
 import { onStandBuild } from "./update.js";
 
@@ -6,7 +6,7 @@ const STAMP = "#4338ca";
 const ALARM = "poll";
 
 async function setup() {
-  await chrome.alarms.create(ALARM, { periodInMinutes: 1 });
+  await chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
   await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   await poll();
 }

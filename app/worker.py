@@ -29,8 +29,10 @@ from app.core.logging import configure_logging
 from app.core.settings import Settings
 from app.db.session import make_engine, make_session_factory
 from app.notify.postbox import MailError, PostboxMailer
+from app.pipeline import demo
 from app.pipeline.analysis import Models, refresh_explanations, rescore, run_analysis
 from app.pipeline.notify import NotifyRun, daily_report, notify_deals
+from app.pipeline.prefilter import run_prefilter
 from app.pipeline.proposals import adopt_manager_kp, make_proposals
 from app.pipeline.runs import finish, take_pending
 from app.scoring.rules import Rules, RulesError
@@ -193,6 +195,61 @@ def manual(factory: sessionmaker[Session], settings: Settings) -> None:
     log.info("manual_run_done", row=row_id, failed=failed)
 
 
+def demo_drop(factory: sessionmaker[Session], settings: Settings) -> None:
+    """Демо-показ: в назначенное время повторить закупку как новую и сразу провести её по конвейеру."""
+    now = datetime.now(UTC)
+    with factory.begin() as session:
+        row = demo.take_due(session, now)
+        if row is None:
+            return
+        row_id, source = row.id, int(row.output["source"])
+    deal_id: int | None = None
+    error: str | None = None
+    started = time.monotonic()
+    try:
+        with factory.begin() as session:
+            deal_id = demo.release(session, source, now).id
+            rules = active_rules(session)
+            run_prefilter(session, rules, load_vendors(VENDORS_FILE), now)
+        log.info("demo_released", row=row_id, source=source, deal_id=deal_id)
+        platforms = load_platforms(PLATFORMS_FILE)
+        llm = GatewayLLM(settings.llm_base_url, settings.llm_api_key.get_secret_value())
+        models = Models(settings.llm_model_main, settings.llm_model_cheap)
+        with ANALYZE_LOCK:
+            with Fetcher(settings.proxy_url) as fetcher:
+                run = run_analysis(
+                    factory,
+                    fetcher,
+                    platforms,
+                    load_vendors(VENDORS_FILE),
+                    rules,
+                    llm,
+                    models,
+                    datetime.now(UTC),
+                    1,
+                    only={deal_id},
+                )
+            with factory.begin() as session:
+                make_proposals(session, rules, datetime.now(UTC))
+            sent = notify(factory, settings, rules, platforms, datetime.now(UTC))
+        if run.errors:
+            error = "; ".join(run.errors)
+        log.info(
+            "demo_done",
+            deal_id=deal_id,
+            analyzed=run.analyzed,
+            hot=run.hot,
+            letters=sent.deal_letters,
+            cost_rub=str(run.cost_rub),
+            sec=round(time.monotonic() - started, 1),
+        )
+    except Exception as exc:  # сбой показа не роняет воркер
+        log.exception("demo_failed", error=type(exc).__name__)
+        error = type(exc).__name__
+    with factory.begin() as session:
+        demo.finish(session, row_id, deal_id, error)
+
+
 def requested_proposals(factory: sessionmaker[Session]) -> None:
     """КП по «Беру в работу»: опрос раз в 10 с, чтобы файл появился в карточке почти сразу."""
     try:
@@ -252,6 +309,9 @@ def main() -> None:
     # Заявки «Запустить цикл» со стенда
     scheduler.add_job(
         manual, "interval", seconds=10, args=[factory, settings], id="manual", max_instances=1, coalesce=True
+    )
+    scheduler.add_job(
+        demo_drop, "interval", seconds=5, args=[factory, settings], id="demo", max_instances=1, coalesce=True
     )
     # Каталог: выгрузка store дописывается — подхватываем раз в 6 часов
     scheduler.add_job(

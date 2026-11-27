@@ -203,7 +203,7 @@ def make_row(
         title=d.title,
         subject=subject,
         customer=d.customer_name or "заказчик не указан",
-        platform=platform,
+        platform=f"{platform} · демо-повтор" if "demo" in d.raw_masked else platform,
         procedure=PROCEDURE_RU[d.procedure],
         amount=short_rub(d.nmck),
         n=d.conditions_met,

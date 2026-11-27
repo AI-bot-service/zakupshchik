@@ -494,3 +494,9 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
 }
 .track-stop.is-quiet .track-dot { border-color: var(--c-ink-muted); background: var(--c-ink-muted); }
 .track-stop.is-quiet b { color: var(--c-ink-muted); }
+
+/* Журнал: демо-показ на ретро-данных */
+.demo-panel { margin-top: var(--sp-4); display: grid; gap: var(--sp-3); }
+.demo-form { display: grid; grid-template-columns: 10rem 17rem max-content; gap: var(--sp-3); align-items: end; justify-content: start; }
+.demo-form input { width: 100%; box-sizing: border-box; }
+@media (max-width: 720px) { .demo-form { grid-template-columns: 1fr; } }
