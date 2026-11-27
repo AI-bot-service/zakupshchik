@@ -1,6 +1,7 @@
 """Excel-отчёт менеджеру (§7, §7.3): «Сделки», «Исключённые», «Как считали».
 
-Собирается из БД за период (дата, когда робот нашёл сделку), обратно не читается. История не удаляется:
+Собирается из БД за период (письма — по дате, когда робот нашёл сделку; стенд — по дате размещения
+на площадке), обратно не читается. История не удаляется:
 сделки с истёкшим сроком остаются со статусом «срок истёк». Сортировка: «N из 6» → срок подачи → приоритет.
 Нет цены по каталогу — пустая ячейка с заливкой (как в КП). Время — московское.
 Чтобы файл открывался ровно и в Excel, и в LibreOffice: числа и даты — значения с форматом, а не текст;
@@ -20,7 +21,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
-from sqlalchemy import ColumnElement, and_, or_, select, true
+from sqlalchemy import ColumnElement, and_, func, or_, select, true
 from sqlalchemy.orm import Session
 
 from app.core.provenance import BUILD_MARK
@@ -101,6 +102,7 @@ DEAL_COLUMNS = (
     ("Приоритет", 30),
     ("КП", 30),
     ("Документы", 9),
+    ("Размещено (МСК)", 16),
     ("Найдено (МСК)", 16),
     ("Статус", 14),
 )
@@ -144,31 +146,42 @@ def _fit_row(ws: Worksheet, row: int, widths: tuple[int, ...]) -> None:
 
 @dataclass(frozen=True)
 class Period:
-    """Сделки, найденные в [start, end) по МСК; include_open — плюс все, где приём КП ещё идёт."""
+    """Сделки за [start, end) по МСК; include_open — плюс все, где приём КП ещё идёт.
+
+    published=False — по дате, когда робот нашёл сделку (письма), True — по дате размещения на площадке
+    (стенд: робот работает с 26.11, а закупки размещены раньше; нет даты размещения — дата находки).
+    """
 
     start: datetime | None
     end: datetime | None
     include_open: bool
     title: str
     deal_id: int | None = None  # отчёт по одной сделке — вложение к письму о ней
+    published: bool = False
 
     def where(self, now: datetime) -> ColumnElement[bool]:
         parts: list[ColumnElement[bool]] = []
+        moment = published_at() if self.published else Deal.created_at
         if self.start is not None:
-            parts.append(Deal.created_at >= self.start)
+            parts.append(moment >= self.start)
         if self.end is not None:
-            parts.append(Deal.created_at < self.end)
+            parts.append(moment < self.end)
         if self.deal_id is not None:
             parts.append(Deal.id == self.deal_id)
         found = and_(true(), *parts)
         return or_(found, Deal.end_at > now) if self.include_open else found
 
 
+def published_at() -> ColumnElement[datetime]:
+    return func.coalesce(Deal.start_at, Deal.created_at)
+
+
 def day_period(first: date, last: date) -> Period:
+    """Целые дни по МСК, по дате размещения закупки на площадке."""
     start = datetime.combine(first, time.min, MSK)
     end = datetime.combine(last + timedelta(days=1), time.min, MSK)
     title = f"{first:%d.%m.%Y}" if first == last else f"{first:%d.%m.%Y}–{last:%d.%m.%Y}"
-    return Period(start, end, False, f"найдены {title}")
+    return Period(start, end, False, f"размещены {title}", published=True)
 
 
 ALL_TIME = Period(None, None, False, "вся история")
@@ -224,10 +237,13 @@ def _kp(deal: Deal, proposal: Proposal | None) -> str:
     return "нет: " + "; ".join(blockers[:3]) if blockers else "нет"
 
 
-def build_report(session: Session, rules: Rules, now: datetime, period: Period) -> tuple[bytes, ReportStats]:
-    """Сделки за период; статусы — на момент сборки."""
+def build_report(
+    session: Session, rules: Rules, now: datetime, period: Period, only: ColumnElement[bool] | None = None
+) -> tuple[bytes, ReportStats]:
+    """Сделки за период; статусы — на момент сборки. only — фильтр вкладки стенда (файл = экран)."""
     platforms = {p.id: p for p in session.scalars(select(Platform))}
-    deals = session.scalars(select(Deal).where(worked_filter(), period.where(now))).all()
+    scope = and_(period.where(now), only if only is not None else true())
+    deals = session.scalars(select(Deal).where(worked_filter(), scope)).all()
     deals = sorted(
         deals,
         key=lambda d: (
@@ -278,6 +294,7 @@ def build_report(session: Session, rules: Rules, now: datetime, period: Period) 
                 _priority(score),
                 _kp(deal, proposals.get(deal.id)),
                 len(files) if isinstance(files, list) else 0,
+                _msk(deal.start_at),
                 _msk(deal.created_at),
                 STATUS_RU[deal.status],
             ]
@@ -285,7 +302,7 @@ def build_report(session: Session, rules: Rules, now: datetime, period: Period) 
         row = ws.max_row
         ws.cell(row=row, column=4).hyperlink = deal.url
         ws.cell(row=row, column=4).font = Font(color="0563C1", underline="single")
-        for col in (2, 21):
+        for col in (2, 21, 22):
             ws.cell(row=row, column=col).number_format = DATETIME
         for col in (8, 9):
             ws.cell(row=row, column=col).number_format = MONEY
@@ -299,7 +316,7 @@ def build_report(session: Session, rules: Rules, now: datetime, period: Period) 
         _fit_row(ws, row, tuple(w for _, w in DEAL_COLUMNS))
     ws.auto_filter.ref = ws.dimensions
 
-    excluded = _excluded(wb.create_sheet("Исключённые"), session, platforms, now, period)
+    excluded = _excluded(wb.create_sheet("Исключённые"), session, platforms, scope)
     _how(wb.create_sheet("Как считали"), rules, period, now)
 
     wb.properties.creator = "Закупщик"
@@ -311,7 +328,7 @@ def build_report(session: Session, rules: Rules, now: datetime, period: Period) 
 
 
 def _excluded(
-    ws: Worksheet, session: Session, platforms: dict[int, Platform], now: datetime, period: Period
+    ws: Worksheet, session: Session, platforms: dict[int, Platform], scope: ColumnElement[bool]
 ) -> int:
     columns = (
         ("Предмет (ссылка)", 50),
@@ -320,11 +337,12 @@ def _excluded(
         ("НМЦ, ₽", 13),
         ("Подача до (МСК)", 16),
         ("Причина", 50),
+        ("Размещено (МСК)", 16),
         ("Найдено (МСК)", 16),
     )
     _header(ws, columns)
     rows = session.scalars(
-        select(Deal).where(excluded_filter(), period.where(now)).order_by(Deal.created_at, Deal.id)
+        select(Deal).where(excluded_filter(), scope).order_by(Deal.created_at, Deal.id)
     ).all()
     for deal in rows:
         reason = {
@@ -339,6 +357,7 @@ def _excluded(
                 _num(deal.nmck),
                 _msk(deal.end_at),
                 reason or "не указана",
+                _msk(deal.start_at),
                 _msk(deal.created_at),
             ]
         )
@@ -346,7 +365,7 @@ def _excluded(
         ws.cell(row=r, column=1).hyperlink = deal.url
         ws.cell(row=r, column=1).font = Font(color="0563C1", underline="single")
         ws.cell(row=r, column=4).number_format = MONEY
-        for col in (5, 7):
+        for col in (5, 7, 8):
             ws.cell(row=r, column=col).number_format = DATETIME
         for col in range(1, len(columns) + 1):
             ws.cell(row=r, column=col).alignment = WRAP

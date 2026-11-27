@@ -4,22 +4,23 @@
 <div class="page-head">
   <div>
     <h1>Сделки</h1>
-    <p class="muted">{% if view.value == 'archive' %}Все сделки, которые робот нашёл с {{ first | dmy }} по {{ last | dmy }}, с их статусами сейчас. История не удаляется.{% else %}Сверху — где выполнено больше условий из шести, внутри — у кого раньше заканчивается приём КП.{% endif %}</p>
+    <p class="muted">{% if view.value == 'archive' %}Все сделки, размещённые на площадках с {{ first | dmy }} по {{ last | dmy }}, с их статусами сейчас. История не удаляется.{% else %}Сверху — где выполнено больше условий из шести, внутри — у кого раньше заканчивается приём КП.{% if first %} Только размещённые с {{ first | dmy }} по {{ last | dmy }}.{% endif %}{% endif %}</p>
   </div>
-  <form class="export" method="get" action="/deals" aria-label="Период">
-    <input type="hidden" name="view" value="archive">
-    <label for="from">Найдены с</label>
-    <input id="from" name="from" type="date" value="{{ first }}" max="{{ today }}" required>
+  <form class="export" method="get" action="/deals" aria-label="Период по дате размещения">
+    <input type="hidden" name="view" value="{{ view.value }}">
+    <label for="from">Размещены с</label>
+    <input id="from" name="from" type="date" value="{{ first }}" max="{{ today }}">
     <label for="to">по</label>
-    <input id="to" name="to" type="date" value="{{ last }}" max="{{ today }}" required>
+    <input id="to" name="to" type="date" value="{{ last }}" max="{{ today }}">
     <button class="btn btn-quiet" type="submit">Показать</button>
+    {% if first and view.value != 'archive' %}<a class="btn btn-quiet" href="/deals?view={{ view.value }}">Сбросить даты</a>{% endif %}
     <button class="btn btn-primary btn-small" type="submit" formaction="/deals.xlsx">Скачать Excel</button>
   </form>
 </div>
 
 <nav class="tabs" aria-label="Какие сделки показать">
   {% for key, title in views.items() %}
-  <a href="/deals?view={{ key.value }}{% if key.value == 'archive' %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}" {% if key == view %}aria-current="page"{% endif %}>{{ title }} <span>{{ counts[key] }}</span></a>
+  <a href="/deals?view={{ key.value }}{% if first %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}" {% if key == view %}aria-current="page"{% endif %}>{{ title }} <span>{{ counts[key] }}</span></a>
   {% endfor %}
 </nav>
 
@@ -34,7 +35,7 @@
       <span class="deal-main">
         <span class="deal-title">{{ r.subject }}</span>
         <span class="deal-meta">{{ r.customer }}</span>
-        <span class="deal-meta">{{ r.platform }}, {{ r.procedure }}{% if view.value == 'archive' %} · найдена {{ r.found_msk }}{% endif %}</span>
+        <span class="deal-meta">{{ r.platform }}, {{ r.procedure }} · размещена {{ r.published_msk }}{% if view.value == 'archive' %}, найдена {{ r.found_msk }}{% endif %}</span>
         {% if r.reason and r.status.value == 'filtered_out' %}<span class="deal-reason">{{ r.reason }}</span>{% endif %}
       </span>
       <span class="deal-side">
@@ -52,11 +53,14 @@
 </ol>
 {% else %}
 <section class="sheet empty">
-  {% if view.value == 'open' %}
+  {% if period_dates and view.value != 'archive' %}
+  <h2>На этой вкладке нет сделок, размещённых {{ period_dates }}</h2>
+  <p>Выберите другой период выше или <a href="/deals?view={{ view.value }}">сбросьте даты</a>.</p>
+  {% elif view.value == 'open' %}
   <h2>Открытых сделок сейчас нет</h2>
   <p>Робот проверяет площадки каждые несколько минут. Прошлые разобранные сделки — во вкладке <a href="/deals?view=all">«Все разобранные»</a>, а почему отсеяны остальные — в <a href="/deals?view=excluded">«Отсеянных»</a>.</p>
   {% elif view.value == 'archive' %}
-  <h2>За {{ period_title[8:] }} робот сделок не нашёл</h2>
+  <h2>Нет сделок, размещённых {{ period_dates }}</h2>
   <p>Выберите другой период выше. Ежедневно в 9:00 полная история уходит на почту файлом history.</p>
   {% else %}
   <h2>Здесь пока пусто</h2>

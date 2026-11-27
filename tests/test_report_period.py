@@ -6,8 +6,9 @@ from openpyxl import Workbook
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import ClauseElement
 
-from app.api.deals import _range
-from app.report.excel import ALL_TIME, MONEY, _fit_row, day_period
+from app.api.deals import _period, _range
+from app.report.excel import ALL_TIME, MONEY, Period, _fit_row, day_period
+from app.web.view import View, view_filter
 
 NOW = datetime(2026, 11, 27, 9, 0, tzinfo=UTC)
 
@@ -20,9 +21,31 @@ def test_day_period_covers_whole_msk_days() -> None:
     p = day_period(date(2026, 11, 26), date(2026, 11, 27))
     assert p.start == datetime(2026, 11, 25, 21, 0, tzinfo=UTC)
     assert p.end == datetime(2026, 11, 27, 21, 0, tzinfo=UTC)
-    assert p.title == "найдены 26.11.2026–27.11.2026"
+    assert p.title == "размещены 26.11.2026–27.11.2026"
     sql = _sql(p.where(NOW))
-    assert "deal.created_at >=" in sql and "deal.created_at <" in sql and "end_at" not in sql
+    # Робот работает с 26.11, закупки размещены раньше: фильтр по дате размещения, а не находки
+    assert "coalesce(deal.start_at, deal.created_at) >=" in sql and "end_at" not in sql
+
+
+def test_letters_period_still_by_found_date() -> None:
+    sql = _sql(Period(NOW, None, True, "вчера и сегодня").where(NOW))
+    assert "deal.created_at >=" in sql and "start_at" not in sql
+
+
+def test_dates_optional_except_archive() -> None:
+    today = date(2026, 11, 27)
+    assert _period(View.OPEN, None, None, today) is None
+    assert _period(View.OPEN, "", "", today) is None  # пустые поля формы
+    assert _period(View.ARCHIVE, "", None, today) == (date(2026, 11, 21), today)
+    assert _period(View.OPEN, "2026-11-25", "", today) == (date(2026, 11, 25), today)
+    with pytest.raises(HTTPException):
+        _period(View.OPEN, "27.11.2026", None, today)
+
+
+def test_export_uses_tab_filter() -> None:
+    assert _sql(view_filter(View.ARCHIVE, NOW)) == "true"
+    assert "filtered_out" in _sql(view_filter(View.EXCLUDED, NOW))
+    assert "deal.end_at >" in _sql(view_filter(View.OPEN, NOW))
 
 
 def test_all_time_has_no_date_limits() -> None:

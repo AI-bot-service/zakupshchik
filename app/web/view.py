@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import ColumnElement, Select, and_, func, or_, select, true
 from sqlalchemy.orm import Session
 
 from app.agent.schemas import Analysis
@@ -28,7 +28,15 @@ from app.db.models import (
 )
 from app.notify.letters import rub, short_rub
 from app.pipeline.prefilter import PROCEDURE_RU
-from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU, STATUS_RU, TRI_RU, Period, worked_filter
+from app.report.excel import (
+    CONTRACT_RU,
+    MSK,
+    PAYMENT_RU,
+    STATUS_RU,
+    TRI_RU,
+    Period,
+    worked_filter,
+)
 from app.scoring.score import CONDITIONS_TOTAL, catalog_met
 
 FILES_ROOT = Path("/app/data/files")
@@ -105,22 +113,24 @@ def msk(moment: datetime | None) -> str:
     return "не указано" if moment is None else moment.astimezone(MSK).strftime("%d.%m %H:%M")
 
 
-def view_query(view: View, now: datetime, period: Period | None = None) -> Select[Deal]:
+def view_filter(view: View, now: datetime) -> ColumnElement[bool]:
+    """Условие вкладки «Сделки»; им же фильтруется Excel, чтобы файл совпадал с экраном."""
     day_start = now.astimezone(MSK).replace(hour=0, minute=0, second=0, microsecond=0)
-    q = select(Deal)
     if view is View.ARCHIVE:
-        # Вся история за период, любые статусы: истёкшие и отсеянные тоже
-        return q.where(period.where(now)) if period else q
+        return true()  # вся история, любые статусы: истёкшие и отсеянные тоже
     if view is View.EXCLUDED:
-        return q.where(Deal.status == DealStatus.FILTERED_OUT, or_(Deal.end_at > now, Deal.end_at.is_(None)))
+        return and_(Deal.status == DealStatus.FILTERED_OUT, or_(Deal.end_at > now, Deal.end_at.is_(None)))
     if view is View.ALL:
-        return q.where(worked_filter())
-    q = q.where(Deal.status.in_(WORKED))
+        return worked_filter()
+    worked = Deal.status.in_(WORKED)
     if view is View.OPEN:
-        q = q.where(Deal.end_at > now)
-    elif view is View.TODAY:
-        q = q.where(Deal.created_at >= day_start)
-    return q
+        return and_(worked, Deal.end_at > now)
+    return and_(worked, Deal.created_at >= day_start)  # TODAY
+
+
+def view_query(view: View, now: datetime, period: Period | None = None) -> Select[Deal]:
+    q = select(Deal).where(view_filter(view, now))
+    return q.where(period.where(now)) if period else q
 
 
 @dataclass(frozen=True)
@@ -145,6 +155,7 @@ class DealRow:
     reason: str | None
     url: str
     found_msk: str
+    published_msk: str
 
 
 def _subject(deal: Deal) -> str:
@@ -156,7 +167,7 @@ def _subject(deal: Deal) -> str:
 def deal_rows(session: Session, view: View, now: datetime, period: Period | None = None) -> list[DealRow]:
     deals = list(session.scalars(view_query(view, now, period)))
     if view is View.ARCHIVE:
-        deals.sort(key=lambda d: (d.created_at, d.id), reverse=True)
+        deals.sort(key=lambda d: (d.start_at or d.created_at, d.id), reverse=True)
     else:
         deals.sort(
             key=lambda d: (
@@ -193,6 +204,7 @@ def deal_rows(session: Session, view: View, now: datetime, period: Period | None
                 reason=d.filter_reason,
                 url=d.url,
                 found_msk=msk(d.created_at),
+                published_msk=msk(d.start_at),
             )
         )
     return rows
@@ -414,6 +426,7 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
             reason=deal.filter_reason,
             url=deal.url,
             found_msk=msk(deal.created_at),
+            published_msk=msk(deal.start_at),
         ),
         url=deal.url,
         nmck=rub(deal.nmck),

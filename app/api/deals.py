@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
@@ -15,7 +16,7 @@ from app.api.auth import require_user
 from app.db.models import Deal, DealStatus, Feedback
 from app.db.session import get_session
 from app.pipeline.proposals import request_kp
-from app.report.excel import MSK, build_report, day_period
+from app.report.excel import ALL_TIME, MSK, build_report, day_period
 from app.scoring.rules import RulesError
 from app.scoring.store import active_rules
 from app.web.view import (
@@ -27,6 +28,7 @@ from app.web.view import (
     deal_rows,
     file_path,
     view_counts,
+    view_filter,
 )
 
 router = APIRouter()
@@ -76,17 +78,36 @@ def get_deal(session: Session, deal_id: int) -> Deal:
 
 
 MAX_RANGE_DAYS = 366
+DEFAULT_DAYS = 7
 
 
 def _range(first: date | None, last: date | None, today: date) -> tuple[date, date]:
-    """Период архива и выгрузки: по умолчанию последние 7 дней; перепутанные даты меняем местами."""
+    """Период по дате размещения: не задан — последние 7 дней; перепутанные даты меняем местами."""
     last = min(last or today, today)
-    first = first or last - timedelta(days=6)
+    first = first or last - timedelta(days=DEFAULT_DAYS - 1)
     if first > last:
         first, last = last, first
     if (last - first).days >= MAX_RANGE_DAYS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Период не длиннее года")
     return first, last
+
+
+def _day(raw: str | None) -> date | None:
+    """Пустое поле даты из формы (from=) — «не задано», а не ошибка."""
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Дата в формате ГГГГ-ММ-ДД") from exc
+
+
+def _period(view: View, first: str | None, last: str | None, today: date) -> tuple[date, date] | None:
+    """Даты не заданы: «Архив» — последние 7 дней, остальные вкладки — без ограничения по датам."""
+    a, b = _day(first), _day(last)
+    if a is None and b is None and view is not View.ARCHIVE:
+        return None
+    return _range(a, b, today)
 
 
 @router.get("/deals", response_class=HTMLResponse)
@@ -95,13 +116,13 @@ def deals_page(
     user: User,
     session: Db,
     view: View = View.OPEN,
-    first: Annotated[date | None, Query(alias="from")] = None,
-    last: Annotated[date | None, Query(alias="to")] = None,
+    first: Annotated[str | None, Query(alias="from", max_length=10)] = None,
+    last: Annotated[str | None, Query(alias="to", max_length=10)] = None,
 ) -> HTMLResponse:
     now = datetime.now(UTC)
     today = now.astimezone(MSK).date()
-    first, last = _range(first, last, today)
-    period = day_period(first, last)
+    span = _period(view, first, last, today)
+    period = day_period(*span) if span else None
     return request.app.state.templates.TemplateResponse(  # type: ignore[no-any-return]
         request,
         "deals.html",
@@ -112,9 +133,9 @@ def deals_page(
             "counts": view_counts(session, now, period),
             "rows": deal_rows(session, view, now, period),
             "today": today.isoformat(),
-            "first": first.isoformat(),
-            "last": last.isoformat(),
-            "period_title": period.title,
+            "first": span[0].isoformat() if span else "",
+            "last": span[1].isoformat() if span else "",
+            "period_dates": period.title.removeprefix("размещены ") if period else None,
         },
     )
 
@@ -162,20 +183,28 @@ def deal_file(deal_id: int, file_id: str, user: User, session: Db) -> FileRespon
 def export(
     user: User,
     session: Db,
-    first: Annotated[date | None, Query(alias="from")] = None,
-    last: Annotated[date | None, Query(alias="to")] = None,
+    view: View = View.ARCHIVE,
+    first: Annotated[str | None, Query(alias="from", max_length=10)] = None,
+    last: Annotated[str | None, Query(alias="to", max_length=10)] = None,
 ) -> Response:
-    """Excel за дату или период: сделки, найденные в эти дни, со статусами на момент выгрузки."""
+    """Excel ровно того, что на экране: та же вкладка и тот же период по дате размещения."""
     now = datetime.now(UTC)
-    first, last = _range(first, last, now.astimezone(MSK).date())
+    span = _period(view, first, last, now.astimezone(MSK).date())
     try:
         rules = active_rules(session)
         session.commit()
     except (RulesError, ValueError, OSError) as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Правила не читаются") from exc
-    data, _ = build_report(session, rules, now, day_period(first, last))
-    span = f"{first:%Y-%m-%d}" if first == last else f"{first:%Y-%m-%d}_{last:%Y-%m-%d}"
-    name = f"zakupshchik-{span}.xlsx"
+    period = day_period(*span) if span else ALL_TIME
+    period = replace(period, title=f"вкладка «{VIEW_RU[view]}», {period.title}")
+    data, _ = build_report(session, rules, now, period, view_filter(view, now))
+    if span is None:
+        dates = f"{now.astimezone(MSK):%Y-%m-%d}"
+    elif span[0] == span[1]:
+        dates = f"{span[0]:%Y-%m-%d}"
+    else:
+        dates = f"{span[0]:%Y-%m-%d}_{span[1]:%Y-%m-%d}"
+    name = f"zakupshchik-{view.value}-{dates}.xlsx"
     return Response(
         data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
