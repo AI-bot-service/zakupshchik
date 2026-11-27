@@ -13,12 +13,12 @@ from app.notify.letters import DealLetter, rub
 from app.pipeline.prefilter import PROCEDURE_RU
 from app.report.excel import CONTRACT_RU, PAYMENT_RU
 from app.report.stamps import MSK
-from app.scoring.rules import Rules
 from app.scoring.score import CONDITIONS_TOTAL, catalog_met
 
 PAPER, SHEET, INK, MUTED, RULE = "#eef1f5", "#ffffff", "#18212e", "#5a6576", "#d5dbe3"
 STAMP, STAMP_SOFT = "#4338ca", "#e6e5fb"
 OK, OK_SOFT, DOWN, DOWN_SOFT, PRICE_EMPTY = "#1e7a4c", "#e3f3ea", "#b42318", "#fdecea", "#fff1c2"
+INSET = "#f5f7fa"
 FONT = "Manrope,'Segoe UI',Roboto,Arial,sans-serif"
 
 SHORT = {
@@ -31,19 +31,11 @@ SHORT = {
 }
 
 
-def _meaning(rules: Rules | None) -> dict[str, str]:
-    """Что означает каждое условие — с порогами из действующих правил."""
-    nmck = f"{rules.profile.filters.max_nmck_rub:,.0f}".replace(",", " ") if rules else "1 000 000"
-    days = f"{rules.profile.conditions.max_postpay_days}" if rules else "10"
-    hours = f"{rules.profile.conditions.min_hours_for_kp:g}" if rules else "24"
-    return {
-        "catalog": "все позиции закупки нашлись в каталоге Софтлайна",
-        "amount": f"НМЦ не больше {nmck} ₽",
-        "simple": "без конкурса, обеспечения, требований к участнику и «только МСП»",
-        "payment": f"предоплата или отсрочка не больше {days} дн.",
-        "time": f"до конца приёма КП не меньше {hours} ч",
-        "fits": "сумма по ценам каталога не больше НМЦ",
-    }
+def condition_text(c: dict[str, Any]) -> str:
+    """Строка под плиткой условия (стенд и письмо). НМЦ и срок уже в шапке — у выполненных порог."""
+    if c.get("met") and c.get("key") in ("amount", "time"):
+        return str(c.get("title", ""))
+    return str(c.get("reason", ""))
 
 
 def _e(value: object) -> str:
@@ -58,33 +50,66 @@ def _section(title: str, body: str) -> str:
     )
 
 
-def _bar(conditions: list[dict[str, Any]], rules: Rules | None) -> str:
-    cells, legend = [], []
-    meaning = _meaning(rules)
-    width = f"{100 / max(len(conditions), 1):.2f}%"
-    for c in conditions:
-        key = str(c.get("key"))
-        met = bool(c.get("met"))
-        fg, bg = (OK, OK_SOFT) if met else (DOWN, DOWN_SOFT)
-        label = SHORT.get(key, str(c.get("title", "")))
-        cells.append(
-            f'<td width="{width}" style="background:{bg};color:{fg};padding:8px 2px;text-align:center;'
-            f'font:700 12px/1.25 {FONT};border:2px solid {SHEET};white-space:nowrap">'
-            f'<span style="font-size:15px">{"✔" if met else "✘"}</span><br>{_e(label)}</td>'
-        )
-        legend.append(
-            f'<tr><td width="72" style="padding:2px 8px 2px 0;font:700 12px/1.4 {FONT};color:{fg};'
-            f'vertical-align:top">{"✔" if met else "✘"} {_e(label)}</td>'
-            f'<td style="padding:2px 0;font:400 12px/1.4 {FONT};color:{MUTED}">'
-            f"{_e(meaning.get(key, ''))}</td></tr>"
-        )
+TILES_PER_ROW = 3  # шесть плиток в 640 px письма: 3 × 2, как карточка на узком экране
+
+
+def _tiles(conditions: list[dict[str, Any]]) -> str:
+    """Условия закупки — те же плитки, что в карточке на стенде: ✓/✗, условие, причина по этой сделке."""
+    met = sum(1 for c in conditions if c.get("met"))
+    width = f"{100 / TILES_PER_ROW:.2f}%"
+    rows = []
+    for i in range(0, len(conditions), TILES_PER_ROW):
+        cells = []
+        for c in conditions[i : i + TILES_PER_ROW]:
+            ok = bool(c.get("met"))
+            fg, bg, text = (OK, INSET, MUTED) if ok else (DOWN, DOWN_SOFT, INK)
+            label = SHORT.get(str(c.get("key")), str(c.get("title", "")))
+            cells.append(
+                f'<td width="{width}" valign="top" style="background:{bg};border-top:3px solid {fg};'
+                f'border-left:4px solid {SHEET};border-right:4px solid {SHEET};padding:10px 12px 12px">'
+                f'<div style="font:800 14px/1.3 {FONT};color:{fg}">'
+                f"{'✓' if ok else '✗'}&nbsp;{_e(label)}</div>"
+                f'<div style="font:400 12px/1.4 {FONT};color:{text};padding-top:4px">'
+                f"{_e(condition_text(c))}</div></td>"
+            )
+        cells += [f'<td width="{width}" style="border:0"></td>'] * (TILES_PER_ROW - len(cells))
+        rows.append(f'<tr>{"".join(cells)}</tr><tr><td colspan="{TILES_PER_ROW}" height="8"></td></tr>')
     return (
-        f'<div style="font:400 12px/1.4 {FONT};color:{MUTED};padding-top:16px">'
-        "Условия отбора: зелёным — выполнено, красным — нет</div>"
+        f'<tr><td style="padding:24px 24px 0">'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="border-collapse:collapse;table-layout:fixed;margin-top:4px"><tr>{"".join(cells)}</tr></table>'
+        f'style="border-collapse:collapse;border-bottom:1px solid {RULE}"><tr>'
+        f'<td style="font:700 15px/1.3 {FONT};color:{INK};padding-bottom:8px">Условия закупки</td>'
+        f'<td align="right" style="font:400 13px/1.3 {FONT};color:{MUTED};padding-bottom:8px">'
+        f"Выполнено {met} из {CONDITIONS_TOTAL}</td></tr></table>"
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="border-collapse:collapse;margin-top:8px">{"".join(legend)}</table>'
+        f'style="border-collapse:collapse;table-layout:fixed;margin-top:8px">{"".join(rows)}</table>'
+        "</td></tr>"
+    )
+
+
+def _button(href: str, label: str, primary: bool) -> str:
+    style = (
+        f"background:{STAMP};color:{SHEET};padding:14px 22px;border-radius:6px"
+        if primary
+        else f"color:{STAMP};padding:14px 0"
+    )
+    weight = 700 if primary else 600
+    return (
+        f'<a href="{_e(href)}" style="display:inline-block;{style};font:{weight} 15px/1 {FONT};'
+        f'text-decoration:none;margin:0 16px 8px 0">{_e(label)}</a>'
+    )
+
+
+def _page(parts: list[str]) -> str:
+    return (
+        '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+        f'<body style="margin:0;padding:0;background:{PAPER}">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'style="background:{PAPER}"><tr><td align="center" style="padding:8px 4px">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'style="max-width:640px;background:{SHEET};border:1px solid {RULE};border-radius:6px">'
+        f"{''.join(parts)}</table></td></tr></table></body></html>"
     )
 
 
@@ -163,7 +188,7 @@ def _positions(letter: DealLetter) -> str:
     )
 
 
-def deal_html(letter: DealLetter, now: datetime, rules: Rules | None = None) -> str:
+def deal_html(letter: DealLetter, now: datetime) -> str:
     d, a = letter.deal, letter.analysis
     score: dict[str, Any] = d.score_breakdown.get("score") or {}
     expl: dict[str, Any] = d.score_breakdown.get("explanation") or {}
@@ -191,16 +216,22 @@ def deal_html(letter: DealLetter, now: datetime, rules: Rules | None = None) -> 
         f'<div style="font:800 26px/1.15 {FONT};color:{verdict_color};padding-top:12px">{verdict}'
         f'<span style="color:{INK};font-weight:700"> — {d.conditions_met} из 6</span></div>'
         f'<div style="font:600 17px/1.4 {FONT};color:{INK};padding-top:8px">{_e(a.subject)}</div>'
-        f"{_bar(conditions, rules)}</td></tr>"
+        "</td></tr>",
+        _tiles(conditions),
     ]
+    how = (
+        "«Подготовить КП» внизу письма, робот соберёт КП с пустыми ценами в карточку сделки."
+        if letter.kp_url
+        else "«Беру в работу» в карточке, робот соберёт КП с пустыми ценами."
+    )
     if not in_catalog:
         parts.append(
             f'<tr><td style="padding:16px 24px 0"><div style="background:{DOWN_SOFT};'
             f"border-left:4px solid {DOWN};"
             f'padding:12px 16px;font:400 14px/1.45 {FONT};color:{INK}">'
             "<b>Позиции нет в каталоге Софтлайна.</b> "
-            "Решите, искать ли продукт у дистрибьютора или не идти. Если берёте — нажмите "
-            "«Беру в работу» в карточке, робот соберёт КП с пустыми ценами.</div></td></tr>"
+            f"Решите, искать ли продукт у дистрибьютора или не идти. Если берёте — нажмите {how}"
+            "</div></td></tr>"
         )
     facts = [
         ("НМЦ", _e(rub(d.nmck)), True, None),
@@ -217,9 +248,6 @@ def deal_html(letter: DealLetter, now: datetime, rules: Rules | None = None) -> 
     parts.append(_section("Главное", _facts(facts)))
     if a.positions:
         parts.append(_section("Что предлагаем", _positions(letter)))
-    failed = [f"{c.get('title')}: {c.get('reason')}" for c in conditions if not c.get("met")]
-    if failed:
-        parts.append(_section("Что не выполнено", _list(failed, DOWN)))
     reasons = {str(c.get("reason")) for c in conditions if not c.get("met")}
     risks = [f for f in letter.findings if f not in reasons]
     if risks:
@@ -242,7 +270,9 @@ def deal_html(letter: DealLetter, now: datetime, rules: Rules | None = None) -> 
         files.append(
             "КП не сформировано: "
             + ("; ".join(blockers) if blockers else "нет данных")
-            + ". Нажмите «Беру в работу» в карточке — робот соберёт КП с аналогами и пустыми ценами"
+            + ". Нажмите "
+            + ("«Подготовить КП»" if letter.kp_url else "«Беру в работу» в карточке")
+            + " — робот соберёт КП с аналогами и пустыми ценами"
         )
     if letter.docs_attached:
         files.append("Документы закупки: " + ", ".join(letter.docs_attached))
@@ -250,24 +280,22 @@ def deal_html(letter: DealLetter, now: datetime, rules: Rules | None = None) -> 
         files.append("Не вложены, откройте на площадке: " + ", ".join(letter.docs_not_attached))
     parts.append(_section("Во вложении", _list(files, MUTED)))
 
+    buttons = []
+    if letter.kp_url:
+        buttons.append(_button(letter.kp_url, "Подготовить КП", True))
+    buttons += [
+        _button(letter.card_url, "Открыть карточку", not letter.kp_url),
+        _button(d.url, "Закупка на площадке", False),
+    ]
+    note = (
+        "«Подготовить КП» берёт сделку в работу: робот соберёт КП, оно появится в карточке сделки. "
+        if letter.kp_url
+        else ""
+    )
     parts.append(
-        f'<tr><td style="padding:24px 24px 24px">'
-        f'<a href="{_e(letter.card_url)}" style="display:inline-block;background:{STAMP};color:{SHEET};'
-        f'font:700 15px/1 {FONT};text-decoration:none;padding:14px 22px;border-radius:6px">'
-        "Открыть карточку</a>"
-        f'<a href="{_e(d.url)}" style="display:inline-block;margin-left:16px;color:{STAMP};'
-        f'font:600 14px/1 {FONT};padding:14px 0">Закупка на площадке</a>'
-        f'<div style="font:400 12px/1.5 {FONT};color:{MUTED};padding-top:24px">'
+        f'<tr><td style="padding:24px 24px 24px">{"".join(buttons)}'
+        f'<div style="font:400 12px/1.5 {FONT};color:{MUTED};padding-top:16px">{note}'
         "Письмо собрал робот «Закупщик». "
         "Заявку он не подаёт и КП заказчику не отправляет — это делает менеджер.</div></td></tr>"
     )
-    return (
-        '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1"></head>'
-        f'<body style="margin:0;padding:0;background:{PAPER}">'
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="background:{PAPER}"><tr><td align="center" style="padding:8px 4px">'
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="max-width:640px;background:{SHEET};border:1px solid {RULE};border-radius:6px">'
-        f"{''.join(parts)}</table></td></tr></table></body></html>"
-    )
+    return _page(parts)

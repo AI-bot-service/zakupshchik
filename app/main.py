@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api import admin, auth, deals, ext, journal, status
+from app.api import admin, auth, deals, ext, journal, mail, status
 from app.core.logging import configure_logging
 from app.core.provenance import BUILD_HEADER, BUILD_MARK
 from app.core.settings import Settings
@@ -47,7 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     templates.env.globals["build_mark"] = BUILD_MARK
     # версия стилей по содержимому: новый CSS — новый адрес, браузер не держит старый из кэша
     templates.env.globals["asset_v"] = hashlib.sha256(
-        b"".join((WEB_DIR / "static" / f).read_bytes() for f in ("tokens.css", "app.css"))
+        b"".join((WEB_DIR / "static" / f).read_bytes() for f in ("tokens.css", "app.css", "kp.js"))
     ).hexdigest()[:10]
     templates.env.filters["msk"] = format_msk
     templates.env.filters["dmy"] = lambda iso: f"{iso[8:10]}.{iso[5:7]}.{iso[:4]}"
@@ -76,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ext.pages)
     app.include_router(admin.router)
     app.include_router(journal.router)
+    app.include_router(mail.router)
 
     @app.get("/")
     def home(user: Annotated[str, Depends(auth.require_user)]) -> RedirectResponse:

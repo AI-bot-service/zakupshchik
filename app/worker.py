@@ -77,6 +77,18 @@ def _cycle(factory: sessionmaker[Session], proxy_url: str | None) -> dict[str, A
         return {"error": type(exc).__name__}
 
 
+def make_mailer(settings: Settings) -> PostboxMailer | None:
+    try:
+        return PostboxMailer(
+            settings.postbox_access_key_id,
+            settings.postbox_secret_key.get_secret_value(),
+            settings.postbox_from,
+        )
+    except MailError as exc:
+        log.warning("notify_skipped", reason=str(exc))
+        return None
+
+
 def notify(
     factory: sessionmaker[Session],
     settings: Settings,
@@ -87,19 +99,21 @@ def notify(
     """Письма по горячим сделкам и ежедневный Excel. Нет Postbox или адресатов — пропускаем."""
     if not settings.recipients:
         return NotifyRun()
-    try:
-        mailer = PostboxMailer(
-            settings.postbox_access_key_id,
-            settings.postbox_secret_key.get_secret_value(),
-            settings.postbox_from,
-        )
-    except MailError as exc:
-        log.warning("notify_skipped", reason=str(exc))
+    mailer = make_mailer(settings)
+    if mailer is None:
         return NotifyRun()
     by_code = {c.code: c for c in platforms}
     with Fetcher(settings.proxy_url) as fetcher, factory.begin() as session:
         run = notify_deals(
-            session, mailer, settings.recipients, rules, now, settings.public_url, fetcher, by_code
+            session,
+            mailer,
+            settings.recipients,
+            rules,
+            now,
+            settings.public_url,
+            fetcher,
+            by_code,
+            settings.app_secret_key.get_secret_value(),
         )
     with factory.begin() as session:
         daily = daily_report(session, mailer, settings.recipients, rules, now, settings.public_url)
@@ -251,7 +265,7 @@ def demo_drop(factory: sessionmaker[Session], settings: Settings) -> None:
 
 
 def requested_proposals(factory: sessionmaker[Session]) -> None:
-    """КП по «Беру в работу»: опрос раз в 10 с, чтобы файл появился в карточке почти сразу."""
+    """КП по «Беру в работу» и кнопке в письме: опрос раз в 10 с, файл появляется в карточке почти сразу."""
     try:
         with factory.begin() as session:
             adopted = adopt_manager_kp(session)
@@ -315,7 +329,13 @@ def main() -> None:
     )
     # Каталог: выгрузка store дописывается — подхватываем раз в 6 часов
     scheduler.add_job(
-        requested_proposals, "interval", seconds=10, args=[factory], id="kp", max_instances=1, coalesce=True
+        requested_proposals,
+        "interval",
+        seconds=10,
+        args=[factory],
+        id="kp",
+        max_instances=1,
+        coalesce=True,
     )
     scheduler.add_job(import_catalog, "interval", hours=6, args=[factory], id="catalog", max_instances=1)
     log.info("worker_started", interval_min=interval)

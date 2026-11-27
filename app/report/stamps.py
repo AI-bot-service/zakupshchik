@@ -22,7 +22,12 @@ STATUS_RU = {
     DealStatus.EXPIRED: "приём закрыт",
     DealStatus.FILTERED_OUT: "отсеяна",
 }
-CHANNEL_RU = {Channel.STAND: "стенд", Channel.EXTENSION: "плагин", Channel.WORKER: "робот"}
+CHANNEL_RU = {
+    Channel.STAND: "стенд",
+    Channel.EXTENSION: "плагин",
+    Channel.WORKER: "робот",
+    Channel.EMAIL: "почта",
+}
 
 
 def msk(moment: datetime | None) -> str:

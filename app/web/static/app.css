@@ -489,6 +489,87 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
   .stamp-table > div, .flowmap div { grid-template-columns: 1fr; gap: var(--sp-1); }
 }
 
+/* ── КП собирается: лист печатается по строкам, по готовности на него падает штамп ── */
+.forge { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-3); align-items: start; }
+.forge { border-radius: var(--radius); outline: none; }
+.forge.is-focused { animation: forge-focus 1.6s var(--ease) both; }
+@keyframes forge-focus {
+  0%, 35% { box-shadow: 0 0 0 4px var(--c-sheet), 0 0 0 7px var(--c-stamp-soft); }
+  100% { box-shadow: 0 0 0 4px var(--c-sheet), 0 0 0 7px transparent; }
+}
+.forge-sheet {
+  position: relative; display: grid; align-content: start; gap: 7px;
+  width: 104px; aspect-ratio: 1 / 1.414; padding: 14px 12px;
+  background: var(--c-sheet); border: 1px solid var(--c-rule); border-radius: 2px; box-shadow: var(--shadow);
+}
+.forge-logo { width: 34%; height: 8px; border-radius: 2px; background: var(--c-stamp-soft); margin-bottom: 4px; }
+.forge-line, .forge-total {
+  height: 5px; border-radius: 2px; background: var(--c-rule);
+  transform-origin: left center; animation: forge-type 2.6s var(--ease) infinite;
+}
+.forge-line:nth-child(3) { width: 82%; animation-delay: 0.25s; }
+.forge-line:nth-child(4) { width: 92%; animation-delay: 0.5s; }
+.forge-line:nth-child(5) { width: 64%; animation-delay: 0.75s; }
+.forge-line:nth-child(6) { width: 88%; animation-delay: 1s; }
+.forge-line:nth-child(7) { width: 72%; animation-delay: 1.25s; }
+.forge-total { width: 40%; justify-self: end; margin-top: 6px; background: var(--c-ink-muted); animation-delay: 1.5s; }
+@keyframes forge-type {
+  0% { transform: scaleX(0); }
+  45%, 85% { transform: scaleX(1); }
+  100% { transform: scaleX(1); opacity: 0.35; }
+}
+.forge-stamp {
+  position: absolute; inset: 0; margin: auto; width: max-content; height: max-content;
+  padding: var(--sp-1) var(--sp-2); border: 3px double currentColor; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--c-sheet) 70%, transparent);
+  color: var(--c-ok); font-weight: 800; font-size: var(--fs-sm); line-height: 1.1; text-align: center;
+  opacity: 0; transform: rotate(-9deg);
+}
+.forge.is-done .forge-line, .forge.is-done .forge-total { animation: none; transform: none; }
+.forge.is-done .forge-stamp { opacity: 1; animation: forge-stamp 420ms var(--ease) both; }
+.forge.is-done .forge-sheet { animation: forge-thud 420ms var(--ease) 160ms; }
+@keyframes forge-stamp {
+  0% { opacity: 0; transform: rotate(-9deg) scale(2.2); }
+  55% { opacity: 1; transform: rotate(-9deg) scale(0.92); }
+  100% { opacity: 1; transform: rotate(-9deg) scale(1); }
+}
+@keyframes forge-thud { 40% { transform: translateY(3px) scale(0.985); } }
+
+.forge-side { display: grid; gap: var(--sp-2); min-width: 0; }
+.forge-title { font-size: var(--fs-base); }
+.forge.is-done .forge-title { color: var(--c-ok); }
+.forge-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); font-size: var(--fs-sm); }
+.forge-steps li { position: relative; padding-left: 22px; color: var(--c-ink-muted); line-height: 1.35; }
+.forge-steps li::before {
+  content: ""; position: absolute; left: 2px; top: 0.3em; width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--c-rule); background: var(--c-sheet); box-sizing: border-box;
+}
+.forge-steps .is-now { color: var(--c-ink); font-weight: 600; }
+.forge-steps .is-now::before { border-color: var(--c-stamp); background: var(--c-stamp); animation: forge-pulse 1.2s var(--ease) infinite; }
+.forge-steps .is-done { color: var(--c-ink); }
+.forge-steps .is-done::before {
+  content: "✓"; top: 0; width: auto; height: auto; border: 0; background: none;
+  color: var(--c-ok); font-weight: 800; transition: color var(--t-fast);
+}
+@keyframes forge-pulse { 50% { box-shadow: 0 0 0 5px var(--c-stamp-soft); } }
+.forge-done-text { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--c-ok); }
+.forge .hint { margin: 0; }
+
+/* Блок «КП» после подмены: файлы ложатся по одному */
+.is-arrived .files li { animation: kp-arrive var(--t-base) var(--ease) both; }
+.is-arrived .files li:nth-child(2) { animation-delay: 90ms; }
+@keyframes kp-arrive { from { opacity: 0; transform: translateY(6px); } }
+
+/* Страница по кнопке «Подготовить КП» из письма */
+.mail-kp { max-width: 640px; display: grid; gap: var(--sp-4); }
+.mail-kp h1 { font-size: var(--fs-xl); }
+.mail-kp-deal { display: grid; gap: var(--sp-1); padding: var(--sp-3); border-radius: var(--radius); background: var(--c-inset); }
+.mail-kp-card { justify-self: start; }
+.mail-kp-go { display: grid; gap: var(--sp-2); justify-items: start; margin: 0; }
+.mail-kp-sent { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; }
+.mail-kp-sent p { margin: 0; flex: 1 1 240px; }
+.mail-kp .forge-sheet { width: 128px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

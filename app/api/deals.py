@@ -228,6 +228,7 @@ def set_status(
             raise
         return RedirectResponse(f"/deals/{deal_id}?need_kp=1#decide", status_code=status.HTTP_303_SEE_OTHER)
     log.info("deal_status", deal_id=deal.id, action=action.value, user=user)
+    # к анимации сборки КП после «Беру в работу» прокручивает и ставит фокус static/kp.js
     return RedirectResponse(f"/deals/{deal.id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
@@ -260,6 +261,14 @@ async def upload_kp(
     apply_status(session, deal, DealStatus.SUBMITTED, "своё КП менеджера", stand(user), details)
     log.info("deal_kp_uploaded", deal_id=deal.id, size=len(data), user=user)
     return RedirectResponse(f"/deals/{deal.id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/deals/{deal_id}/kp.json")
+def kp_state(deal_id: int, user: User, session: Db) -> dict[str, str]:
+    """Опрос карточки, пока робот собирает КП: анимация в блоке «КП» ждёт ready."""
+    p = latest_proposal(session, get_deal(session, deal_id).id)
+    ready = p is not None and bool(p.file_path) and Path(p.file_path or "").is_file()
+    return {"state": "ready" if ready else "building"}
 
 
 @router.get("/deals/{deal_id}/files/{file_id}")

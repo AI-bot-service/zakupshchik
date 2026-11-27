@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -29,6 +29,7 @@ from app.db.models import (
     Platform,
     Proposal,
 )
+from app.notify.kp_link import kp_url
 from app.notify.letter_html import deal_html
 from app.notify.letters import DealLetter, daily_text, deal_subject, deal_text
 from app.notify.postbox import Attachment, Mailer, MailError
@@ -94,13 +95,14 @@ def _send(
 ) -> bool:
     row.attempts += 1
     try:
-        mailer.send(row.recipient, subject, text, files, html)
+        message_id = mailer.send(row.recipient, subject, text, files, html)
     except MailError as exc:
         row.last_error = str(exc)[:500]
         row.status = NotifyStatus.FAILED if row.attempts >= MAX_ATTEMPTS else NotifyStatus.PENDING
         return False
     row.status = NotifyStatus.SENT
     row.last_error = None
+    row.message_id, row.subject = message_id[:255], subject
     row.attachments_sha256 = [hashlib.sha256(f.data).hexdigest() for f in files]
     session.flush()
     return True
@@ -149,7 +151,9 @@ def notify_deals(
     public_url: str,
     fetcher: Fetcher | None = None,
     configs: dict[str, PlatformConfig] | None = None,
+    link_secret: str = "",
 ) -> NotifyRun:
+    """link_secret — APP_SECRET_KEY: подпись кнопки «Подготовить КП» (если КП к письму не приложено)."""
     run = NotifyRun()
     min_n = rules.profile.notify.min_conditions
     platforms = {p.id: p for p in session.scalars(select(Platform))}
@@ -200,11 +204,15 @@ def notify_deals(
             docs_not_attached=docs_skipped,
             card_url=f"{public_url}/deals/{deal.id}",
         )
-        subject, text = deal_subject(deal, analysis, now), deal_text(letter, now)
-        html = deal_html(letter, now, rules)
+        subject = deal_subject(deal, analysis, now)
         excel, _ = build_report(session, rules, now, Period(None, None, False, f"сделка №{deal.id}", deal.id))
         sheet = Attachment(f"zakupshchik-{deal.external_id}.xlsx", excel, _MIME[".xlsx"])
+        session.flush()  # id записи письма — в подписи кнопки «Подготовить КП»
         for row in todo:
+            mine = letter
+            if link_secret and not kp_files:
+                mine = replace(letter, kp_url=kp_url(public_url, link_secret, row.id))
+            text, html = deal_text(mine, now), deal_html(mine, now)
             if _send(session, mailer, row, subject, text, [sheet, *kp_files, *docs], html):
                 run.deal_letters += 1
             else:

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "_kp_forge.html" import kp_forge %}
+{% block title %}Подготовить КП · Закупщик{% endblock %}
+{% block head %}<script src="/static/kp.js?v={{ asset_v }}" defer></script>{% endblock %}
+{% block content %}
+<section class="panel mail-kp" aria-labelledby="mail-kp-h">
+  <div class="panel-head">
+    <h1 id="mail-kp-h">Подготовить КП</h1>
+  </div>
+  <div class="mail-kp-deal">
+    <b>{{ subject }}</b>
+    <span class="muted">{{ deal.customer_name or 'Заказчик не указан' }}</span>
+    <span>Максимальная цена <b class="money">{{ nmck }}</b>, приём КП до {{ end_msk }} МСК</span>
+  </div>
+
+  {% if state == 'building' %}
+  {{ kp_forge(base ~ '/state', ['Читаю разбор закупки', 'Подбираю позиции и цены каталога', 'Собираю DOCX и PDF'], done_text='КП лежит в карточке сделки. Сделка отмечена «В работе».') }}
+  <a class="btn btn-primary mail-kp-card" href="/deals/{{ deal.id }}">Открыть карточку</a>
+  {% elif state == 'ready' %}
+  <div class="mail-kp-sent">
+    <div class="stamp stamp-take"><span class="stamp-main">КП готово</span></div>
+    <p>КП лежит в карточке сделки на стенде, DOCX и PDF.</p>
+  </div>
+  <a class="btn btn-primary mail-kp-card" href="/deals/{{ deal.id }}">Открыть карточку</a>
+  {% elif can %}
+  <form method="post" action="{{ base }}" class="mail-kp-go">
+    <button class="btn btn-primary" type="submit">Подготовить КП</button>
+    <p class="hint">Сделка станет «В работе», напоминания о ней прекратятся. Робот соберёт КП по разбору — аналоги и позиции вне каталога тоже, с пустыми ценами — и положит в карточку сделки. Обычно меньше минуты.</p>
+  </form>
+  {% else %}
+  <p class="flow-note">{% if deal.conditions_met is none %}Робот ещё разбирает документы — КП собрать пока не из чего.{% else %}Приём КП по сделке закрыт или решение уже принято — КП из письма не собрать.{% endif %}</p>
+  {% endif %}
+
+  <p class="hint">Робот КП заказчику не отправляет — это делаете вы. Карточка открывается после входа на стенд.</p>
+</section>
+{% endblock %}

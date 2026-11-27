@@ -28,7 +28,7 @@ from app.db.models import (
     Proposal,
     ProposalStatus,
 )
-from app.notify.letter_html import SHORT
+from app.notify.letter_html import SHORT, condition_text
 from app.notify.letters import rub, short_rub
 from app.pipeline.prefilter import PROCEDURE_RU
 from app.pipeline.status_log import decided_at
@@ -441,7 +441,7 @@ def next_actions(deal: Deal, has_kp: bool, now: datetime) -> list[Action]:
                     "КП отправлено",
                     "Нажмите, когда отправите КП заказчику на площадке. На штампе будет «Отправлено» и дата."
                     if has_kp
-                    else "КП ещё нет в карточке: дождитесь робота или приложите своё в блоке «КП».",
+                    else "",
                     primary=True,
                 )
             ]
@@ -468,13 +468,6 @@ def can_skip(deal: Deal, now: datetime) -> bool:
         DealStatus.HOT,
         DealStatus.SKIPPED,
     )
-
-
-def condition_text(c: dict[str, Any]) -> str:
-    """Строка под плиткой условия. НМЦ и срок уже в шапке карточки — у выполненных пишем порог, а не число."""
-    if c.get("met") and c.get("key") in ("amount", "time"):
-        return str(c.get("title", ""))
-    return str(c.get("reason", ""))
 
 
 def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:

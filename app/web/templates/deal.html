@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_kp_forge.html" import kp_forge %}
 {% set r = card.row %}
 {% set st = r.status.value %}
 {% block title %}{{ r.subject[:60] }} · Закупщик{% endblock %}
@@ -12,6 +13,7 @@
   <button class="btn btn-quiet" type="submit">Приложить и отметить «Отправлено»</button>
 </form>
 {% endmacro %}
+{% block head %}<script src="/static/kp.js?v={{ asset_v }}" defer></script>{% endblock %}
 {% block content %}
 <a class="back" href="/deals">Все сделки</a>
 
@@ -54,7 +56,7 @@
     <b>КП в карточке нет</b>
     <p>«КП отправлено» ставится, когда КП лежит в карточке — так видно, что именно ушло заказчику.</p>
     {% if st == 'taken' %}
-    <p>Робот уже собирает КП — обновите страницу через минуту или приложите своё.</p>
+    <p>Робот уже собирает КП — оно появится в блоке «КП», когда будет готово. Или приложите своё.</p>
     {% else %}
     <form method="post" action="/deals/{{ r.id }}/status">
       <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -76,7 +78,7 @@
     <form method="post" action="/deals/{{ r.id }}/status" class="flow-action">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="btn {{ 'btn-primary' if a.primary else 'btn-quiet' }}" name="action" value="{{ a.to.value }}" type="submit">{{ a.label }}</button>
-      <p class="hint">{{ a.hint }}</p>
+      {% if a.hint %}<p class="hint">{{ a.hint }}</p>{% endif %}
     </form>
     {% endfor %}
     {% if card.can_skip %}
@@ -257,7 +259,7 @@
       <a class="btn btn-quiet" href="{{ card.url }}" target="_blank" rel="noopener noreferrer">Открыть на площадке</a>
     </section>
 
-    <section class="panel" aria-labelledby="kp-h">
+    <section class="panel" id="kp-panel" aria-labelledby="kp-h">
       <h2 id="kp-h">Коммерческое предложение</h2>
       {% if card.kp_files %}
       <ul class="files">
@@ -269,8 +271,7 @@
         {% if card.kp.sent %}<b>Отправлено заказчику.</b>{% else %}Заказчику пока не отправлено.{% endif %}
       </p>
       {% elif st == 'taken' %}
-      <p class="empty-word">Собирается</p>
-      <p class="hint">Робот собирает КП — обновите страницу через минуту.</p>
+      {{ kp_forge('/deals/' ~ r.id ~ '/kp.json', ['Читаю разбор закупки', 'Подбираю позиции и цены каталога', 'Собираю DOCX и PDF'], swap=true) }}
       {% else %}
       <p class="empty-word">Пусто</p>
       <p class="hint">{% if card.actions and card.actions[0].to.value == 'taken' %}КП появится здесь после «Беру в работу».{% else %}Робот собирает КП, когда сделку берут в работу.{% endif %}</p>

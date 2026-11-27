@@ -1,8 +1,10 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from email import message_from_bytes, policy
 
 from app.agent.schemas import Analysis
 from app.db.models import ContractFormat, PaymentTerms, TriState
+from app.notify.kp_link import kp_token, kp_token_ok, kp_url
 from app.notify.letter_html import deal_html
 from app.notify.letters import DealLetter, deal_subject, deal_text
 from app.notify.postbox import Attachment, build_mime, sign_v4
@@ -99,12 +101,65 @@ def test_deal_html_escapes_platform_text_and_has_text_fallback() -> None:
     assert "<script>" not in html and "&lt;script&gt;" in html and "&lt;b&gt;жирно" in html
     assert (
         "Стоит взять" in html
-        and "Условия отбора" in html
-        and "нашлись в каталоге" in html
+        and "Условия закупки" in html
+        and "✓&nbsp;Каталог" in html
+        and "найдены" in html
         and "KL4863RAQFS" in html
     )
     assert 'href="https://stand.example/deals/1"' in html
+    assert "Подготовить КП" not in html  # без подписанной ссылки кнопки нет
 
     msg = message_from_bytes(build_mime("a@x.ru", "b@x.ru", "Тема", "текст", [], html), policy=policy.default)
     types = [p.get_content_type() for p in msg.walk()]
     assert "text/plain" in types and "text/html" in types
+
+
+def test_kp_link_signed_per_letter() -> None:
+    secret = "s" * 32
+    url = kp_url("https://stand.example", secret, 7)
+    assert url == f"https://stand.example/mail/kp/7/{kp_token(secret, 7)}"
+    assert kp_token_ok(secret, 7, kp_token(secret, 7))
+    assert not kp_token_ok(secret, 8, kp_token(secret, 7))
+    assert not kp_token_ok("x" * 32, 7, kp_token(secret, 7))
+
+
+def test_deal_letter_has_kp_button_and_unmet_tile() -> None:
+    deal = make_deal()
+    deal.conditions_met = 5
+    deal.payment_terms, deal.payment_days = PaymentTerms.POSTPAYMENT, 30
+    deal.contract_format, deal.has_tz = ContractFormat.NONE, TriState.YES
+    deal.score_breakdown = {
+        "score": {
+            "conditions": [
+                {"key": "catalog", "title": "Каталог", "met": True, "reason": "найдены"},
+                {"key": "payment", "title": "Оплата", "met": False, "reason": "отсрочка 30 дн. <больше>"},
+            ]
+        }
+    }
+    letter = DealLetter(
+        deal=deal,
+        platform="Портал поставщиков",
+        analysis=Analysis.model_validate(analysis_args()),
+        items={501: catalog_item()},
+        findings=[],
+        kp_files=[],
+        docs_attached=[],
+        docs_not_attached=[],
+        card_url="https://stand.example/deals/1",
+        kp_url="https://stand.example/mail/kp/7/abc",
+    )
+    html = deal_html(letter, NOW)
+    assert 'href="https://stand.example/mail/kp/7/abc"' in html and ">Подготовить КП</a>" in html
+    assert "✗&nbsp;Оплата" in html and "отсрочка 30 дн. &lt;больше&gt;" in html
+    assert "Выполнено 1 из 6" in html
+    assert (
+        "Подготовить КП (появится в карточке сделки на стенде): https://stand.example/mail/kp/7/abc"
+        in deal_text(letter, NOW)
+    )
+    assert "Подготовить КП" not in deal_html(replace(letter, kp_url=None), NOW)
+
+
+def test_letter_keeps_given_message_id() -> None:
+    raw = build_mime("robot@mail.example", "m@example.test", "5 из 6", "текст", [], message_id="<b@x>")
+    msg = message_from_bytes(raw, policy=policy.default)
+    assert msg["Message-ID"] == "<b@x>" and msg["In-Reply-To"] is None

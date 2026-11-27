@@ -125,6 +125,7 @@ class Channel(StrEnum):
     STAND = "stand"
     EXTENSION = "extension"
     WORKER = "worker"
+    EMAIL = "email"  # кнопка «Подготовить КП» в письме
 
 
 class NotifyChannel(StrEnum):
@@ -404,6 +405,9 @@ class Notification(Timestamps, Base):
     status: Mapped[NotifyStatus] = mapped_column(_enum(NotifyStatus), default=NotifyStatus.PENDING)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
+    # Какое письмо ушло: Message-ID и тема (миграция 0004)
+    message_id: Mapped[str | None] = mapped_column(String(255))
+    subject: Mapped[str | None] = mapped_column(Text)
 
 
 class RulesVersion(Base):

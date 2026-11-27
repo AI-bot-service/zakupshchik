@@ -37,8 +37,15 @@ class MailError(RuntimeError):
 
 class Mailer(Protocol):
     def send(
-        self, to: str, subject: str, text: str, attachments: list[Attachment], html: str | None = None
-    ) -> str: ...
+        self,
+        to: str,
+        subject: str,
+        text: str,
+        attachments: list[Attachment],
+        html: str | None = None,
+    ) -> str:
+        """Возвращает Message-ID письма (пишется в notification)."""
+        ...
 
 
 def _hmac(key: bytes, msg: str) -> bytes:
@@ -74,14 +81,20 @@ def sign_v4(body: bytes, key_id: str, secret: str, now: datetime) -> dict[str, s
 
 
 def build_mime(
-    sender: str, to: str, subject: str, text: str, attachments: list[Attachment], html: str | None = None
+    sender: str,
+    to: str,
+    subject: str,
+    text: str,
+    attachments: list[Attachment],
+    html: str | None = None,
+    message_id: str | None = None,
 ) -> bytes:
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = to
     msg["Subject"] = subject
     msg["Date"] = formatdate(localtime=False)
-    msg["Message-ID"] = make_msgid(domain=sender.rsplit("@", 1)[-1])
+    msg["Message-ID"] = message_id or make_msgid(domain=sender.rsplit("@", 1)[-1])
     msg.set_content(text, charset="utf-8")
     if html is not None:  # почтовик без HTML покажет текстовую версию
         msg.add_alternative(html, subtype="html", charset="utf-8")
@@ -118,19 +131,24 @@ class PostboxMailer:
         return resp
 
     def send(
-        self, to: str, subject: str, text: str, attachments: list[Attachment], html: str | None = None
+        self,
+        to: str,
+        subject: str,
+        text: str,
+        attachments: list[Attachment],
+        html: str | None = None,
     ) -> str:
-        raw = build_mime(self._sender, to, subject, text, attachments, html)
+        message_id = make_msgid(domain=self._sender.rsplit("@", 1)[-1])
+        raw = build_mime(self._sender, to, subject, text, attachments, html, message_id)
         payload = {
             "FromEmailAddress": self._sender,
             "Destination": {"ToAddresses": [to]},
             "Content": {"Raw": {"Data": base64.b64encode(raw).decode()}},
         }
         try:
-            resp = self._post(json.dumps(payload).encode())
+            self._post(json.dumps(payload).encode())
         except httpx.HTTPStatusError as exc:
             raise MailError(f"Postbox ответил {exc.response.status_code}") from exc
         except httpx.TransportError as exc:
             raise MailError(f"Postbox недоступен ({type(exc).__name__})") from exc
-        message_id: str = resp.json().get("MessageId", "")
         return message_id

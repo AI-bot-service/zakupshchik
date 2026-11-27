@@ -49,6 +49,7 @@ class DealLetter:
     docs_attached: list[str]
     docs_not_attached: list[str]
     card_url: str
+    kp_url: str | None = None  # кнопка «Подготовить КП»: робот соберёт КП в карточку на стенде
 
 
 def deal_subject(deal: Deal, analysis: Analysis, now: datetime) -> str:
@@ -72,7 +73,7 @@ def deal_text(letter: DealLetter, now: datetime) -> str:
             if catalog_met(d.score_breakdown)
             else [
                 "Нет в каталоге Софтлайна: решите, искать ли продукт у дистрибьютора или не идти. "
-                "КП робот не сформировал.",
+                "КП робот сам не собирает — по ссылке «Подготовить КП» соберёт в карточку с пустыми ценами.",
                 "",
             ]
         ),
@@ -118,6 +119,8 @@ def deal_text(letter: DealLetter, now: datetime) -> str:
     else:
         blockers = d.score_breakdown.get("kp_blockers") or []
         out.append("КП не сформировано: " + ("; ".join(blockers) if blockers else "нет данных"))
+        if letter.kp_url:
+            out.append(f"Подготовить КП (появится в карточке сделки на стенде): {letter.kp_url}")
     if letter.docs_attached:
         out.append("Документы закупки во вложении: " + ", ".join(letter.docs_attached))
     if letter.docs_not_attached:

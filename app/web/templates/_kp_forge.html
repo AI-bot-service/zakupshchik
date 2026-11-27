@@ -1,0 +1,21 @@
+{# Анимация «робот собирает КП»: лист печатается по строкам, шаги идут по очереди, по готовности — штамп.
+   poll — адрес JSON {state}; swap — по готовности заменить блоки карточки без перезагрузки. Логика — static/kp.js. #}
+{% macro kp_forge(poll, steps, swap=false, done_text='') %}
+<div class="forge" data-kp-poll="{{ poll }}"{% if swap %} data-kp-swap{% endif %} role="status" aria-live="polite" tabindex="-1">
+  <div class="forge-sheet" aria-hidden="true">
+    <span class="forge-logo"></span>
+    <span class="forge-line"></span><span class="forge-line"></span><span class="forge-line"></span>
+    <span class="forge-line"></span><span class="forge-line"></span><span class="forge-line"></span>
+    <span class="forge-total"></span>
+    <span class="forge-stamp">КП<br>готово</span>
+  </div>
+  <div class="forge-side">
+    <b class="forge-title">Робот собирает КП</b>
+    <ol class="forge-steps">
+      {% for s in steps %}<li{% if loop.first %} class="is-now"{% endif %}>{{ s }}</li>{% endfor %}
+    </ol>
+    {% if done_text %}<p class="forge-done-text" hidden>{{ done_text }}</p>{% endif %}
+    <p class="hint forge-late" hidden>Дольше обычного. Подождите ещё минуту или приложите своё КП.</p>
+  </div>
+</div>
+{% endmacro %}
