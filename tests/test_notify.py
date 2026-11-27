@@ -49,7 +49,7 @@ def test_deal_letter() -> None:
     }
     analysis = Analysis.model_validate(analysis_args())
     subject = deal_subject(deal, analysis, NOW)
-    assert subject == "5 из 5 · антивирус Kaspersky на 50 узлов · 150 тыс. ₽ · подача до 29.11 15:00"
+    assert subject == "5 из 6 · антивирус Kaspersky на 50 узлов · 150 тыс. ₽ · подача до 29.11 15:00"
     letter = DealLetter(
         deal=deal,
         platform="Портал поставщиков",
@@ -65,7 +65,7 @@ def test_deal_letter() -> None:
     assert "точно: KL4863RAQFS" in text and "2 100,00 ₽" in text
     assert "Нет в каталоге" not in text and "Разбор в Excel во вложении" in text
     deal.score_breakdown["score"]["conditions"][0]["met"] = False
-    assert deal_subject(deal, analysis, NOW).startswith("нет в каталоге · 5 из 5")
+    assert deal_subject(deal, analysis, NOW).startswith("нет в каталоге · 5 из 6")
     assert "Нет в каталоге Софтлайна" in deal_text(letter, NOW)
     assert "✔ Каталог: все позиции найдены" in text
     assert "Оплата: постоплата 7 дн." in text and "Риски:\n  • постоплата 7 дней" in text
@@ -77,6 +77,7 @@ def test_deal_letter() -> None:
 def test_deal_html_escapes_platform_text_and_has_text_fallback() -> None:
     deal = make_deal()
     deal.conditions_met = 5
+    deal.conditions_met = 6
     deal.customer_name = '<script>alert(1)</script> "Школа"'
     deal.score_breakdown = {
         "score": {"conditions": [{"key": "catalog", "title": "Каталог", "met": True, "reason": "найдены"}]},

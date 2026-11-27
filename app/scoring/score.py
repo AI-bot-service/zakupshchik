@@ -1,4 +1,4 @@
-"""Проверка ограничений (S6) и оценка «N из 5» (S7) без LLM: факты разбора + правила → итог с разложением.
+"""Проверка ограничений (S6) и оценка «N из 6» (S7) без LLM: факты разбора + правила → итог с разложением.
 
 Пересчёт при смене rules.yaml идёт по сохранённому разбору, без токенов.
 """
@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -56,6 +56,30 @@ class DealView:
     smb_only: TriState
     file_names: tuple[str, ...]
     guarantee_flag: bool
+
+
+CONDITIONS_TOTAL = 6
+
+# В магазине цена часто за пакет: «на 30 ПК» — за 30 мест, «по количеству узлов» — за диапазон узлов,
+# и диапазон в выгрузке ненадёжен. Умножать такую цену на количество из закупки нельзя.
+_PACK = re.compile(
+    r"(?:на|,)\s*(\d+)\s*(?:пк|рабоч\w*|устройств\w*|пользовател\w*|узл\w*|компьютер\w*|станц\w*)", re.I
+)
+_BAND = re.compile(
+    r"по количеству|количество узлов|к-во узлов|\d+\s*[-–]\s*\d+\s*(?:узл|пк|пользовател)", re.I
+)
+
+
+def line_cost(name: str, price: Decimal, qty: float | None) -> Decimal | None:
+    """Стоимость позиции по цене каталога. None — цена за диапазон, честно посчитать нельзя."""
+    need = Decimal(str(qty or 1))
+    if (m := _PACK.search(name)) and int(m.group(1)) > 0:
+        per_pack = Decimal(m.group(1))
+        packs = (need / per_pack).to_integral_value(rounding=ROUND_CEILING)
+        return price * packs
+    if _BAND.search(name):
+        return None
+    return price * need
 
 
 def catalog_met(score_breakdown: dict[str, Any] | None) -> bool:
@@ -171,20 +195,30 @@ def evaluate(
         findings.append(FindingOut(kind=FindingKind.REQUIREMENT, text=text[:200]))
 
     no_price: list[str] = []
+    band_price: list[str] = []
     total = Decimal(0)
     for p in matched:
         item = items[p.catalog_item_id or 0]  # matched отобраны с id из items
         if item.price is None:
             no_price.append(item.name)
+        elif (cost := line_cost(item.name, item.price, p.qty)) is None:
+            band_price.append(item.name)
         else:
-            total += item.price * Decimal(str(p.qty or 1))
+            total += cost
     if no_price:
         findings.append(
             FindingOut(
                 kind=FindingKind.RISK, text=f"нет цены в каталоге: {no_price[0][:60]} — запросить у вендора"
             )
         )
-    catalog_total = total if matched and not no_price else None
+    if band_price:
+        findings.append(
+            FindingOut(
+                kind=FindingKind.RISK,
+                text=f"цена в каталоге за диапазон узлов: {band_price[0][:60]} — пересчитать на нужное число",
+            )
+        )
+    catalog_total = total if matched and not no_price and not band_price else None
     if catalog_total is not None and deal.nmck is not None and catalog_total > deal.nmck:
         findings.append(
             FindingOut(
@@ -193,7 +227,7 @@ def evaluate(
             )
         )
 
-    # ── S7: пять условий ───────────────────────────────────────────────────
+    # ── S7: шесть условий ───────────────────────────────────────────────────
     conflicts = [f for f in findings if f.kind is FindingKind.CONFLICT]
     if matched and not missing_pos and analysis.is_license_supply:
         names = ", ".join(sorted({items[p.catalog_item_id].vendor for p in matched if p.catalog_item_id}))
@@ -272,7 +306,30 @@ def evaluate(
             reason=f"до конца подачи {hours:.0f} ч"
             + ("" if ok else f" — меньше {cond_rules.min_hours_for_kp:g}"),
         )
-    conditions = [c1, c2, c3, c4, c5]
+    if catalog_total is not None and deal.nmck is not None:
+        fits = catalog_total <= deal.nmck
+        c6 = Condition(
+            key="fits",
+            title="Укладываемся в НМЦ",
+            met=fits,
+            reason=(
+                f"по ценам каталога {_rub(catalog_total)} при НМЦ {_rub(deal.nmck)}"
+                if fits
+                else f"по ценам каталога {_rub(catalog_total)} — больше НМЦ {_rub(deal.nmck)}"
+            ),
+        )
+    else:
+        why_unknown = (
+            "НМЦ не указана — сравнить вручную"
+            if deal.nmck is None
+            else "в каталоге нет цены — сравнить с НМЦ после ответа вендора"
+            if no_price
+            else "цена в каталоге за диапазон узлов — пересчитать и сравнить с НМЦ"
+            if band_price
+            else "нечего сравнивать: позиций нет в каталоге"
+        )
+        c6 = Condition(key="fits", title="Укладываемся в НМЦ", met=False, reason=why_unknown)
+    conditions = [c1, c2, c3, c4, c5, c6]
 
     # ── приоритет внутри группы ────────────────────────────────────────────
     w = rules.profile.weights

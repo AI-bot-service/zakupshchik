@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>Сделки</h1>
-    <p class="muted">{% if view.value == 'archive' %}Все сделки, которые робот нашёл с {{ first | dmy }} по {{ last | dmy }}, с их статусами сейчас. История не удаляется.{% else %}Сверху — где выполнено больше условий из пяти, внутри — у кого раньше заканчивается приём КП.{% endif %}</p>
+    <p class="muted">{% if view.value == 'archive' %}Все сделки, которые робот нашёл с {{ first | dmy }} по {{ last | dmy }}, с их статусами сейчас. История не удаляется.{% else %}Сверху — где выполнено больше условий из шести, внутри — у кого раньше заканчивается приём КП.{% endif %}</p>
   </div>
   <form class="export" method="get" action="/deals" aria-label="Период">
     <input type="hidden" name="view" value="archive">
@@ -29,7 +29,7 @@
   <li>
     <a class="deal deal-{{ r.verdict.value }}" href="/deals/{{ r.id }}">
       <span class="mark" aria-label="{{ r.verdict_ru }}">
-        {% if r.n is not none %}<b>{{ r.n }}</b><small>из 5</small>{% else %}<small>{{ 'отсеяна' if r.status.value == 'filtered_out' else 'разбор' }}</small>{% endif %}
+        {% if r.n is not none %}<b>{{ r.n }}</b><small>из 6</small>{% else %}<small>{{ 'отсеяна' if r.status.value == 'filtered_out' else 'разбор' }}</small>{% endif %}
       </span>
       <span class="deal-main">
         <span class="deal-title">{{ r.subject }}</span>

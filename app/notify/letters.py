@@ -54,7 +54,7 @@ def deal_subject(deal: Deal, analysis: Analysis, now: datetime) -> str:
     end = deal.end_at.astimezone(MSK).strftime("%d.%m %H:%M") if deal.end_at else "срок не указан"
     subject = analysis.subject if len(analysis.subject) <= 60 else analysis.subject[:57] + "…"
     mark = "" if catalog_met(deal.score_breakdown) else "нет в каталоге · "
-    return f"{mark}{deal.conditions_met} из 5 · {subject} · {short_rub(deal.nmck)} · подача до {end}"
+    return f"{mark}{deal.conditions_met} из 6 · {subject} · {short_rub(deal.nmck)} · подача до {end}"
 
 
 def deal_text(letter: DealLetter, now: datetime) -> str:
@@ -62,7 +62,7 @@ def deal_text(letter: DealLetter, now: datetime) -> str:
     score: dict[str, Any] = d.score_breakdown.get("score") or {}
     expl: dict[str, Any] = d.score_breakdown.get("explanation") or {}
     out = [
-        f"{d.conditions_met} из 5 — {a.subject}",
+        f"{d.conditions_met} из 6 — {a.subject}",
         "",
         *(
             []
@@ -137,7 +137,7 @@ def daily_text(top: list[Deal], total: int, excluded: int, now: datetime, list_u
     if top:
         out.append("Первые по приоритету:")
         for d in top:
-            out.append(f"  • {d.conditions_met} из 5 · {short_rub(d.nmck)} · {left(d, now)} · {d.title[:90]}")
+            out.append(f"  • {d.conditions_met} из 6 · {short_rub(d.nmck)} · {left(d, now)} · {d.title[:90]}")
             out.append(f"    {d.url}")
     else:
         out.append("Разобранных сделок с открытой подачей нет.")

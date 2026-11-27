@@ -17,7 +17,7 @@ from app.catalog.search import CatalogHit
 from app.db.models import CatalogItem, Deal, DealItem, Law, MatchKind, Procedure, TriState
 from app.pipeline.attachments import AttachmentError, AttachmentText, extract_text, file_path
 from app.scoring.rules import load_rules
-from app.scoring.score import DealView, evaluate
+from app.scoring.score import DealView, evaluate, line_cost
 
 ROOT = Path(__file__).resolve().parent.parent
 RULES = load_rules(ROOT / "config" / "rules.yaml")
@@ -59,7 +59,7 @@ def catalog_item(item_id: int = 501, price: Decimal | None = Decimal("2100")) ->
         product_id=item_id,
         sku="KL4863RAQFS",
         vendor="kaspersky",
-        name="Kaspersky Endpoint Security для бизнеса Стандартный, 50-99 узлов, 1 год",
+        name="Kaspersky Endpoint Security для бизнеса Стандартный на 1 узел, 1 год",
         price=price,
         url="https://store.example/kes",
         rf_registry_no="205",
@@ -314,17 +314,38 @@ def view(**kw: Any) -> DealView:
     return DealView(**(base | kw))
 
 
-def test_five_of_five_is_hot() -> None:
+def test_six_of_six_is_hot() -> None:
     result = evaluate(view(), Analysis.model_validate(analysis_args()), {501: catalog_item()}, RULES, NOW)
-    assert result.n == 5 and result.hot
+    assert result.n == 6 and result.hot
     assert result.catalog_total == Decimal("105000")
     assert set(result.components) == {"coverage", "margin", "amount", "payment", "simplicity"}
+
+
+def test_catalog_price_over_nmck_fails_sixth_condition() -> None:
+    analysis = Analysis.model_validate(analysis_args())
+    result = evaluate(view(nmck=Decimal("90000")), analysis, {501: catalog_item()}, RULES, NOW)
+    fits = next(c for c in result.conditions if c.key == "fits")
+    assert not fits.met and "больше НМЦ" in fits.reason and result.n == 5 and not result.hot
+
+
+@pytest.mark.parametrize(
+    ("name", "qty", "cost"),
+    [
+        ("Dr.Web Комплексная защита на 1 год на 30 ПК", 30, Decimal("1000")),
+        ("Dr.Web Комплексная защита на 1 год на 30 ПК", 31, Decimal("2000")),
+        ("KES для бизнеса Расширенный продление на 1 год по количеству узлов", 34, None),
+        ("KES Стандартный, 50-99 узлов, 1 год", 60, None),
+        ("Astra Linux Special Edition, лицензия", 3, Decimal("3000")),
+    ],
+)
+def test_catalog_price_per_pack(name: str, qty: float, cost: Decimal | None) -> None:
+    assert line_cost(name, Decimal("1000"), qty) == cost
 
 
 def test_long_postpay_and_no_price() -> None:
     analysis = Analysis.model_validate(analysis_args(payment_days=30))
     result = evaluate(view(), analysis, {501: catalog_item(price=None)}, RULES, NOW)
-    assert result.n == 4 and not result.hot
+    assert result.n == 4 and not result.hot  # оплата и «в рамках НМЦ»: цены нет — сравнить нечем
     assert any("нет цены" in f.text for f in result.findings)
     assert result.catalog_total is None and result.components["margin"] == 0.5
 

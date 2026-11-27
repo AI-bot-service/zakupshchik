@@ -12,7 +12,7 @@ from typing import Any
 from app.notify.letters import DealLetter, rub
 from app.pipeline.prefilter import PROCEDURE_RU
 from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU
-from app.scoring.score import catalog_met
+from app.scoring.score import CONDITIONS_TOTAL, catalog_met
 
 PAPER, SHEET, INK, MUTED, RULE = "#eef1f5", "#ffffff", "#18212e", "#5a6576", "#d5dbe3"
 STAMP, STAMP_SOFT = "#4338ca", "#e6e5fb"
@@ -25,6 +25,7 @@ SHORT = {
     "simple": "Простая",
     "payment": "Оплата",
     "time": "Успеваем",
+    "fits": "В рамках НМЦ",
 }
 
 
@@ -89,7 +90,7 @@ def _list(items: list[str], color: str) -> str:
 def _positions(letter: DealLetter) -> str:
     head = "".join(
         f'<td width="{w}%" style="padding:8px;font:700 12px/1.3 {FONT};color:{MUTED};'
-        f'border-bottom:1px solid {RULE};'
+        f"border-bottom:1px solid {RULE};"
         f'text-align:{align}">{t}</td>'
         for t, align, w in (("Что просят", "left", 40), ("Что предлагаем", "left", 42), ("Цена", "right", 18))
     )
@@ -138,7 +139,7 @@ def deal_html(letter: DealLetter, now: datetime) -> str:
     expl: dict[str, Any] = d.score_breakdown.get("explanation") or {}
     conditions: list[dict[str, Any]] = score.get("conditions") or []
     in_catalog = catalog_met(d.score_breakdown)
-    take = d.conditions_met == 5 and in_catalog
+    take = d.conditions_met == CONDITIONS_TOTAL and in_catalog
     verdict = "Стоит взять" if take else "Нужно ваше решение"
     verdict_color = OK if take else STAMP
 
@@ -158,7 +159,7 @@ def deal_html(letter: DealLetter, now: datetime) -> str:
         f'<div style="font:400 13px/1.3 {FONT};color:{MUTED}">Робот «Закупщик» нашёл сделку на площадке '
         f"{_e(letter.platform)}</div>"
         f'<div style="font:800 26px/1.15 {FONT};color:{verdict_color};padding-top:12px">{verdict}'
-        f'<span style="color:{INK};font-weight:700"> — {d.conditions_met} из 5</span></div>'
+        f'<span style="color:{INK};font-weight:700"> — {d.conditions_met} из 6</span></div>'
         f'<div style="font:600 17px/1.4 {FONT};color:{INK};padding-top:8px">{_e(a.subject)}</div>'
         f"{_bar(conditions)}</td></tr>"
     ]

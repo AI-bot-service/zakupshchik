@@ -39,7 +39,7 @@ async function poll() {
     chrome.notifications.create(`deal-${d.id}`, {
       type: "basic",
       iconUrl: "icons/128.png",
-      title: `${d.n} из 5 · ${d.amount} · ${d.verdict_ru}`,
+      title: `${d.n} из 6 · ${d.amount} · ${d.verdict_ru}`,
       message: d.subject,
       contextMessage: `${d.platform}, ${d.left}`,
       priority: 2,

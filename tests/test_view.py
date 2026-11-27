@@ -25,13 +25,13 @@ def test_verdict_follows_conditions() -> None:
         conditions = [{"key": "catalog", "met": catalog, "title": "ПО из каталога", "reason": "-"}]
         return Deal(conditions_met=n, status=status, score_breakdown={"score": {"conditions": conditions}})
 
-    assert verdict(deal(5)) is Verdict.TAKE
-    assert verdict(deal(4, DealStatus.HOT)) is Verdict.TAKE
-    assert verdict(deal(4)) is Verdict.DECIDE
-    assert verdict(deal(3)) is Verdict.SKIP
+    assert verdict(deal(6)) is Verdict.TAKE
+    assert verdict(deal(5, DealStatus.HOT)) is Verdict.TAKE
+    assert verdict(deal(5)) is Verdict.DECIDE
+    assert verdict(deal(4)) is Verdict.SKIP
     assert verdict(deal(None)) is Verdict.WAIT
     assert verdict(deal(None, DealStatus.FILTERED_OUT)) is Verdict.SKIP
     # Позиции нет в каталоге — решает менеджер, автоматически не отсеиваем
+    assert verdict(deal(5, catalog=False)) is Verdict.DECIDE
     assert verdict(deal(4, catalog=False)) is Verdict.DECIDE
-    assert verdict(deal(3, catalog=False)) is Verdict.DECIDE
-    assert verdict(deal(2, catalog=False)) is Verdict.SKIP
+    assert verdict(deal(3, catalog=False)) is Verdict.SKIP

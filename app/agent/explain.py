@@ -39,7 +39,7 @@ def _digits(text: str) -> set[str]:
 def fallback(result: ScoreResult) -> Explanation:
     met = [c.reason for c in result.conditions if c.met]
     unmet = [c.reason for c in result.conditions if not c.met]
-    why = ([f"{result.n} из 5: " + "; ".join(met[:2])] if met else []) + [
+    why = ([f"{result.n} из 6: " + "; ".join(met[:2])] if met else []) + [
         f"Не выполнено: {r}" for r in unmet[:2]
     ]
     risks = [f.text for f in result.findings if f.kind is not FindingKind.CONFLICT]

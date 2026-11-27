@@ -18,7 +18,7 @@ from app.db.models import Procedure
 
 RULES_FILE = Path(__file__).resolve().parents[2] / "config" / "rules.yaml"
 # Поднимать при изменении кода префильтра или оценки: версия правил меняется, сделки пересчитываются
-LOGIC_VERSION = b"prefilter-2/score-1"
+LOGIC_VERSION = b"prefilter-2/score-3"
 
 
 class _Strict(BaseModel):
@@ -59,7 +59,7 @@ class Weights(_Strict):
 class Notify(_Strict):
     daily_report_at: time
     urgent_hours_left: float = Field(gt=0)
-    min_conditions: int = Field(ge=1, le=5)
+    min_conditions: int = Field(ge=1, le=6)
 
 
 class Kp(_Strict):

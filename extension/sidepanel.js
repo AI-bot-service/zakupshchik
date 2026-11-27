@@ -115,7 +115,7 @@ function onboarding(message) {
 // ---------- список ----------
 
 function stampMark(d) {
-  return h("span", { class: `mark mark-${d.verdict}`, "aria-label": d.verdict_ru }, d.n === null ? h("small", {}, "разбор") : [h("b", {}, d.n), h("small", {}, "из 5")]);
+  return h("span", { class: `mark mark-${d.verdict}`, "aria-label": d.verdict_ru }, d.n === null ? h("small", {}, "разбор") : [h("b", {}, d.n), h("small", {}, "из 6")]);
 }
 
 async function renderList() {
@@ -131,7 +131,7 @@ async function renderList() {
   }
   checked.textContent = "проверено " + new Date(inbox.checked_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
   nodes.push(h("h1", {}, "Идёт приём КП"));
-  nodes.push(h("p", { class: "muted" }, `Уведомляем, когда выполнено ${inbox.notify_min} из 5 условий и больше. Откройте закупку на площадке — разбор появится здесь.`));
+  nodes.push(h("p", { class: "muted" }, `Уведомляем, когда выполнено ${inbox.notify_min} из 6 условий и больше. Откройте закупку на площадке — разбор появится здесь.`));
   if (!inbox.deals.length) {
     nodes.push(h("p", { class: "empty" }, "Открытых сделок сейчас нет. Робот проверяет площадки каждые несколько минут."));
   } else {
@@ -246,7 +246,7 @@ function renderCard(card, flash) {
   show(
     h("button", { class: "link back", type: "button", onclick: renderList }, "Все сделки"),
     flash && h("p", { class: "saved", role: "status" }, flash),
-    h("div", { class: `stamp stamp-${r.verdict}` }, h("span", { class: "stamp-main" }, r.verdict_ru), h("span", { class: "stamp-date" }, r.n === null ? r.status_ru : `${r.n} из 5 условий`)),
+    h("div", { class: `stamp stamp-${r.verdict}` }, h("span", { class: "stamp-main" }, r.verdict_ru), h("span", { class: "stamp-date" }, r.n === null ? r.status_ru : `${r.n} из 6 условий`)),
     h("h1", {}, r.subject),
     h("p", { class: "muted" }, r.customer),
     h(

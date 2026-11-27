@@ -29,7 +29,7 @@ from app.db.models import (
 from app.notify.letters import rub, short_rub
 from app.pipeline.prefilter import PROCEDURE_RU
 from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU, STATUS_RU, TRI_RU, Period, worked_filter
-from app.scoring.score import catalog_met
+from app.scoring.score import CONDITIONS_TOTAL, catalog_met
 
 FILES_ROOT = Path("/app/data/files")
 WORKED = (DealStatus.HOT, DealStatus.ANALYZED, DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
@@ -74,11 +74,11 @@ def verdict(deal: Deal) -> Verdict:
         return Verdict.SKIP
     if deal.conditions_met is None:
         return Verdict.WAIT
-    if not catalog_met(deal.score_breakdown) and deal.conditions_met >= 3:
+    if not catalog_met(deal.score_breakdown) and deal.conditions_met >= CONDITIONS_TOTAL - 2:
         return Verdict.DECIDE  # позиции нет в каталоге — решает менеджер: искать у дистрибьютора или не идти
-    if deal.status is DealStatus.HOT or deal.conditions_met == 5:
+    if deal.status is DealStatus.HOT or deal.conditions_met == CONDITIONS_TOTAL:
         return Verdict.TAKE
-    return Verdict.DECIDE if deal.conditions_met >= 4 else Verdict.SKIP
+    return Verdict.DECIDE if deal.conditions_met >= CONDITIONS_TOTAL - 1 else Verdict.SKIP
 
 
 def time_left(end_at: datetime | None, now: datetime) -> str:
