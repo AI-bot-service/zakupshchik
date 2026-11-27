@@ -45,6 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     templates = Jinja2Templates(directory=WEB_DIR / "templates")
     templates.env.globals["build_mark"] = BUILD_MARK
     templates.env.filters["msk"] = format_msk
+    templates.env.filters["dmy"] = lambda iso: f"{iso[8:10]}.{iso[5:7]}.{iso[:4]}"
     app.state.templates = templates
 
     app.add_middleware(

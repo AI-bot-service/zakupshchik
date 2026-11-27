@@ -1,14 +1,18 @@
 """Excel-отчёт менеджеру (§7, §7.3): «Сделки», «Исключённые», «Как считали».
 
-Собирается из БД, обратно не читается. Сортировка: «N из 5» по убыванию → ближайший срок подачи → приоритет.
+Собирается из БД за период (дата, когда робот нашёл сделку), обратно не читается. История не удаляется:
+сделки с истёкшим сроком остаются со статусом «срок истёк». Сортировка: «N из 5» → срок подачи → приоритет.
 Нет цены по каталогу — пустая ячейка с заливкой (как в КП). Время — московское.
+Чтобы файл открывался ровно и в Excel, и в LibreOffice: числа и даты — значения с форматом, а не текст;
+высота строк с переносом считается здесь (Excel сам её не подбирает).
 """
 
 from __future__ import annotations
 
 import io
+import math
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -16,7 +20,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
-from sqlalchemy import or_, select
+from sqlalchemy import ColumnElement, and_, or_, select, true
 from sqlalchemy.orm import Session
 
 from app.core.provenance import BUILD_MARK
@@ -37,8 +41,14 @@ MSK = timezone(timedelta(hours=3), "MSK")
 BLANK_FILL = PatternFill("solid", fgColor="FFF2CC")
 HOT_FILL = PatternFill("solid", fgColor="E2EFDA")
 HEAD_FONT = Font(bold=True)
+HEAD_FILL = PatternFill("solid", fgColor="E6E5FB")
+MONEY = "#,##0.00"
+DATETIME = "DD.MM.YYYY HH:MM"
+LINE_PT = 15
+MAX_ROW_PT = 300
 WRAP = Alignment(wrap_text=True, vertical="top")
 SHOWN = (DealStatus.HOT, DealStatus.ANALYZED, DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
+ANALYZED_KEY = "analysis"
 STATUS_RU = {
     DealStatus.NEW: "в очереди на разбор",
     DealStatus.HOT: "горячая",
@@ -86,8 +96,8 @@ DEAL_COLUMNS = (
     ("ТЗ во вложении", 9),
     ("Только МСП", 9),
     ("Мин. срок КП, дн.", 9),
-    ("Риски", 45),
-    ("Почему", 55),
+    ("Риски", 55),
+    ("Почему", 75),
     ("Приоритет", 30),
     ("КП", 30),
     ("Документы", 9),
@@ -110,8 +120,70 @@ def _header(ws: Worksheet, columns: tuple[tuple[str, int], ...]) -> None:
         ws.column_dimensions[get_column_letter(i)].width = width
         cell = ws.cell(row=1, column=i)
         cell.font = HEAD_FONT
+        cell.fill = HEAD_FILL
         cell.alignment = Alignment(wrap_text=True, vertical="center")
+    ws.row_dimensions[1].height = 2 * LINE_PT + 4
     ws.freeze_panes = "A2"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_title_rows = "1:1"
+
+
+def _fit_row(ws: Worksheet, row: int, widths: tuple[int, ...]) -> None:
+    """Высота строки по самому длинному тексту с переносом: ~1,1 знака на единицу ширины колонки."""
+    lines = 1
+    for col, width in enumerate(widths, 1):
+        value = ws.cell(row=row, column=col).value
+        if isinstance(value, str) and value:
+            per_line = max(int(width * 1.1), 1)
+            lines = max(lines, sum(math.ceil(max(len(part), 1) / per_line) for part in value.split("\n")))
+    ws.row_dimensions[row].height = min(lines * LINE_PT + 3, MAX_ROW_PT)
+
+
+@dataclass(frozen=True)
+class Period:
+    """Сделки, найденные в [start, end) по МСК; include_open — плюс все, где приём КП ещё идёт."""
+
+    start: datetime | None
+    end: datetime | None
+    include_open: bool
+    title: str
+
+    def where(self, now: datetime) -> ColumnElement[bool]:
+        parts: list[ColumnElement[bool]] = []
+        if self.start is not None:
+            parts.append(Deal.created_at >= self.start)
+        if self.end is not None:
+            parts.append(Deal.created_at < self.end)
+        found = and_(true(), *parts)
+        return or_(found, Deal.end_at > now) if self.include_open else found
+
+
+def day_period(first: date, last: date) -> Period:
+    start = datetime.combine(first, time.min, MSK)
+    end = datetime.combine(last + timedelta(days=1), time.min, MSK)
+    title = f"{first:%d.%m.%Y}" if first == last else f"{first:%d.%m.%Y}–{last:%d.%m.%Y}"
+    return Period(start, end, False, f"найдены {title}")
+
+
+ALL_TIME = Period(None, None, False, "вся история")
+
+
+def worked_filter() -> ColumnElement[bool]:
+    """Разобранные моделью: рабочие статусы + истёкшие, у которых есть разбор."""
+    return or_(
+        Deal.status.in_(SHOWN),
+        and_(Deal.status == DealStatus.EXPIRED, Deal.score_breakdown.has_key(ANALYZED_KEY)),
+    )
+
+
+def excluded_filter() -> ColumnElement[bool]:
+    return or_(
+        Deal.status.in_((DealStatus.FILTERED_OUT, DealStatus.NEW)),
+        and_(Deal.status == DealStatus.EXPIRED, ~Deal.score_breakdown.has_key(ANALYZED_KEY)),
+    )
 
 
 @dataclass(frozen=True)
@@ -149,11 +221,10 @@ def _kp(deal: Deal, proposal: Proposal | None) -> str:
     return "нет: " + "; ".join(blockers[:3]) if blockers else "нет"
 
 
-def build_report(session: Session, rules: Rules, now: datetime, since: datetime) -> tuple[bytes, ReportStats]:
-    """Сделки, найденные с `since`, и все, где ещё идёт приём заявок; статусы — на момент сборки."""
+def build_report(session: Session, rules: Rules, now: datetime, period: Period) -> tuple[bytes, ReportStats]:
+    """Сделки за период; статусы — на момент сборки."""
     platforms = {p.id: p for p in session.scalars(select(Platform))}
-    window = or_(Deal.created_at >= since, Deal.end_at > now)
-    deals = session.scalars(select(Deal).where(Deal.status.in_(SHOWN), window)).all()
+    deals = session.scalars(select(Deal).where(worked_filter(), period.where(now))).all()
     deals = sorted(
         deals,
         key=lambda d: (
@@ -179,6 +250,7 @@ def build_report(session: Session, rules: Rules, now: datetime, since: datetime)
         details = deal.raw_masked.get("details") or {}
         files = details.get("files") or []
         hours = None if deal.end_at is None else round((deal.end_at - now).total_seconds() / 3600, 1)
+        hours = hours if hours is not None and hours > 0 else None
         catalog_total = score.get("catalog_total")
         coverage = (score.get("components") or {}).get("coverage")
         ws.append(
@@ -211,9 +283,9 @@ def build_report(session: Session, rules: Rules, now: datetime, since: datetime)
         ws.cell(row=row, column=4).hyperlink = deal.url
         ws.cell(row=row, column=4).font = Font(color="0563C1", underline="single")
         for col in (2, 21):
-            ws.cell(row=row, column=col).number_format = "DD.MM.YYYY HH:MM"
+            ws.cell(row=row, column=col).number_format = DATETIME
         for col in (8, 9):
-            ws.cell(row=row, column=col).number_format = "# ##0.00"
+            ws.cell(row=row, column=col).number_format = MONEY
         ws.cell(row=row, column=10).number_format = "0%"
         if catalog_total is None and score.get("positions_without_price"):
             ws.cell(row=row, column=9).fill = BLANK_FILL
@@ -221,21 +293,22 @@ def build_report(session: Session, rules: Rules, now: datetime, since: datetime)
             ws.cell(row=row, column=1).fill = HOT_FILL
         for col in range(1, len(DEAL_COLUMNS) + 1):
             ws.cell(row=row, column=col).alignment = WRAP
+        _fit_row(ws, row, tuple(w for _, w in DEAL_COLUMNS))
     ws.auto_filter.ref = ws.dimensions
 
-    excluded = _excluded(wb.create_sheet("Исключённые"), session, platforms, now, since)
-    _how(wb.create_sheet("Как считали"), rules)
+    excluded = _excluded(wb.create_sheet("Исключённые"), session, platforms, now, period)
+    _how(wb.create_sheet("Как считали"), rules, period, now)
 
     wb.properties.creator = "Закупщик"
     wb.properties.keywords = BUILD_MARK
-    wb.properties.title = f"Сделки на {now.astimezone(MSK):%d.%m.%Y %H:%M} МСК"
+    wb.properties.title = f"Сделки ({period.title}), выгружено {now.astimezone(MSK):%d.%m.%Y %H:%M} МСК"
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue(), ReportStats(len(deals), excluded)
 
 
 def _excluded(
-    ws: Worksheet, session: Session, platforms: dict[int, Platform], now: datetime, since: datetime
+    ws: Worksheet, session: Session, platforms: dict[int, Platform], now: datetime, period: Period
 ) -> int:
     columns = (
         ("Предмет (ссылка)", 50),
@@ -248,15 +321,13 @@ def _excluded(
     )
     _header(ws, columns)
     rows = session.scalars(
-        select(Deal)
-        .where(
-            Deal.status.in_((DealStatus.FILTERED_OUT, DealStatus.NEW)),
-            or_(Deal.created_at >= since, Deal.end_at > now),
-        )
-        .order_by(Deal.status, Deal.end_at)
+        select(Deal).where(excluded_filter(), period.where(now)).order_by(Deal.created_at, Deal.id)
     ).all()
     for deal in rows:
-        reason = deal.filter_reason if deal.status is DealStatus.FILTERED_OUT else "ещё в очереди на разбор"
+        reason = {
+            DealStatus.FILTERED_OUT: deal.filter_reason,
+            DealStatus.EXPIRED: deal.filter_reason or "приём закончился до разбора",
+        }.get(deal.status, "ещё в очереди на разбор")
         ws.append(
             [
                 deal.title,
@@ -271,19 +342,22 @@ def _excluded(
         r = ws.max_row
         ws.cell(row=r, column=1).hyperlink = deal.url
         ws.cell(row=r, column=1).font = Font(color="0563C1", underline="single")
-        ws.cell(row=r, column=4).number_format = "# ##0.00"
+        ws.cell(row=r, column=4).number_format = MONEY
         for col in (5, 7):
-            ws.cell(row=r, column=col).number_format = "DD.MM.YYYY HH:MM"
+            ws.cell(row=r, column=col).number_format = DATETIME
         for col in range(1, len(columns) + 1):
             ws.cell(row=r, column=col).alignment = WRAP
+        _fit_row(ws, r, tuple(w for _, w in columns))
     ws.auto_filter.ref = ws.dimensions
     return len(rows)
 
 
-def _how(ws: Worksheet, rules: Rules) -> None:
+def _how(ws: Worksheet, rules: Rules, period: Period, now: datetime) -> None:
     p = rules.profile
     f, c, w, kp = p.filters, p.conditions, p.weights, p.kp
     lines = [
+        ("Период", period.title + (" и все, где ещё идёт приём КП" if period.include_open else "")),
+        ("Выгружено", f"{now.astimezone(MSK):%d.%m.%Y %H:%M} МСК"),
         ("Версия правил", rules.version),
         ("Где правятся", "Стенд → «Админка»: каждое сохранение — новая версия с историей и откатом"),
         ("", ""),
@@ -322,3 +396,4 @@ def _how(ws: Worksheet, rules: Rules) -> None:
         if key and not value:
             ws.cell(row=ws.max_row, column=1).font = HEAD_FONT
         ws.cell(row=ws.max_row, column=2).alignment = WRAP
+        _fit_row(ws, ws.max_row, (30, 100))

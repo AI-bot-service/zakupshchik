@@ -28,7 +28,7 @@ from app.db.models import (
 )
 from app.notify.letters import rub, short_rub
 from app.pipeline.prefilter import PROCEDURE_RU
-from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU, STATUS_RU, TRI_RU
+from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU, STATUS_RU, TRI_RU, Period, worked_filter
 
 FILES_ROOT = Path("/app/data/files")
 WORKED = (DealStatus.HOT, DealStatus.ANALYZED, DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
@@ -41,6 +41,7 @@ class View(StrEnum):
     TODAY = "today"
     ALL = "all"
     EXCLUDED = "excluded"
+    ARCHIVE = "archive"
 
 
 VIEW_RU = {
@@ -48,6 +49,7 @@ VIEW_RU = {
     View.TODAY: "Найдены сегодня",
     View.ALL: "Все разобранные",
     View.EXCLUDED: "Отсеянные",
+    View.ARCHIVE: "Архив",
 }
 
 
@@ -100,11 +102,16 @@ def msk(moment: datetime | None) -> str:
     return "не указано" if moment is None else moment.astimezone(MSK).strftime("%d.%m %H:%M")
 
 
-def view_query(view: View, now: datetime) -> Select[Deal]:
+def view_query(view: View, now: datetime, period: Period | None = None) -> Select[Deal]:
     day_start = now.astimezone(MSK).replace(hour=0, minute=0, second=0, microsecond=0)
     q = select(Deal)
+    if view is View.ARCHIVE:
+        # Вся история за период, любые статусы: истёкшие и отсеянные тоже
+        return q.where(period.where(now)) if period else q
     if view is View.EXCLUDED:
         return q.where(Deal.status == DealStatus.FILTERED_OUT, or_(Deal.end_at > now, Deal.end_at.is_(None)))
+    if view is View.ALL:
+        return q.where(worked_filter())
     q = q.where(Deal.status.in_(WORKED))
     if view is View.OPEN:
         q = q.where(Deal.end_at > now)
@@ -133,6 +140,7 @@ class DealRow:
     has_kp: bool
     reason: str | None
     url: str
+    found_msk: str
 
 
 def _subject(deal: Deal) -> str:
@@ -141,15 +149,18 @@ def _subject(deal: Deal) -> str:
     return subject if isinstance(subject, str) and subject else deal.title
 
 
-def deal_rows(session: Session, view: View, now: datetime) -> list[DealRow]:
-    deals = list(session.scalars(view_query(view, now)))
-    deals.sort(
-        key=lambda d: (
-            -(d.conditions_met or 0),
-            d.end_at or datetime.max.replace(tzinfo=now.tzinfo),
-            -float(d.score or 0),
+def deal_rows(session: Session, view: View, now: datetime, period: Period | None = None) -> list[DealRow]:
+    deals = list(session.scalars(view_query(view, now, period)))
+    if view is View.ARCHIVE:
+        deals.sort(key=lambda d: (d.created_at, d.id), reverse=True)
+    else:
+        deals.sort(
+            key=lambda d: (
+                -(d.conditions_met or 0),
+                d.end_at or datetime.max.replace(tzinfo=now.tzinfo),
+                -float(d.score or 0),
+            )
         )
-    )
     platforms = dict(session.execute(select(Platform.id, Platform.name)).tuples().all())
     ids = [d.id for d in deals]
     with_kp = set(session.scalars(select(Proposal.deal_id).where(Proposal.deal_id.in_(ids))))
@@ -176,14 +187,16 @@ def deal_rows(session: Session, view: View, now: datetime) -> list[DealRow]:
                 has_kp=d.id in with_kp,
                 reason=d.filter_reason,
                 url=d.url,
+                found_msk=msk(d.created_at),
             )
         )
     return rows
 
 
-def view_counts(session: Session, now: datetime) -> dict[View, int]:
+def view_counts(session: Session, now: datetime, period: Period | None = None) -> dict[View, int]:
     return {
-        v: session.scalar(select(func.count()).select_from(view_query(v, now).subquery())) or 0 for v in View
+        v: session.scalar(select(func.count()).select_from(view_query(v, now, period).subquery())) or 0
+        for v in View
     }
 
 
@@ -394,6 +407,7 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
             has_kp=bool(kp_files),
             reason=deal.filter_reason,
             url=deal.url,
+            found_msk=msk(deal.created_at),
         ),
         url=deal.url,
         nmck=rub(deal.nmck),

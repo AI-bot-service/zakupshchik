@@ -33,7 +33,7 @@ from app.notify.letters import DealLetter, daily_text, deal_subject, deal_text
 from app.notify.postbox import Attachment, Mailer, MailError
 from app.pipeline.analysis import catalog_items
 from app.pipeline.attachments import AttachmentError, download_file
-from app.report.excel import MSK, build_report
+from app.report.excel import ALL_TIME, MSK, Period, build_report
 from app.scoring.rules import Rules
 
 log = structlog.get_logger()
@@ -205,7 +205,7 @@ def notify_deals(
 def daily_report(
     session: Session, mailer: Mailer, recipients: list[str], rules: Rules, now: datetime, public_url: str
 ) -> NotifyRun:
-    """Раз в день после notify.daily_report_at (МСК): вчера + всё с открытой подачей."""
+    """Раз в день после notify.daily_report_at (МСК): вчера + всё с открытой подачей, и вся история."""
     run = NotifyRun()
     local = now.astimezone(MSK)
     if local.time() < rules.profile.notify.daily_report_at:
@@ -219,7 +219,9 @@ def daily_report(
     if not todo:
         return run
     since = datetime.combine(day - timedelta(days=1), datetime.min.time(), tzinfo=MSK)
-    data, stats = build_report(session, rules, now, since)
+    data, stats = build_report(session, rules, now, Period(since, None, True, "вчера и сегодня"))
+    # Полная история во вложении: если стенд недоступен, у менеджера в почте копия не старше суток
+    history, _ = build_report(session, rules, now, ALL_TIME)
     top = session.scalars(
         select(Deal)
         .where(Deal.status.in_((DealStatus.HOT, DealStatus.ANALYZED)), Deal.end_at > now)
@@ -227,7 +229,10 @@ def daily_report(
         .limit(5)
     ).all()
     name = f"zakupshchik-{day:%Y-%m-%d}.xlsx"
-    files = [Attachment(name, data, _MIME[".xlsx"])]
+    files = [
+        Attachment(name, data, _MIME[".xlsx"]),
+        Attachment(f"zakupshchik-history-{day:%Y-%m-%d}.xlsx", history, _MIME[".xlsx"]),
+    ]
     subject = f"Закупщик: сделки на {day:%d.%m.%Y} — {stats.deals} в отчёте"
     text = daily_text(list(top), stats.deals, stats.excluded, now, f"{public_url}/deals")
     for row in todo:

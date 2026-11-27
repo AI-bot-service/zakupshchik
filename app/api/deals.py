@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 import structlog
@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import require_user
 from app.db.models import Deal, DealStatus, Feedback
 from app.db.session import get_session
-from app.report.excel import MSK, build_report
+from app.report.excel import MSK, build_report, day_period
 from app.scoring.rules import RulesError
 from app.scoring.store import active_rules
 from app.web.view import (
@@ -72,10 +72,33 @@ def get_deal(session: Session, deal_id: int) -> Deal:
     return deal
 
 
+MAX_RANGE_DAYS = 366
+
+
+def _range(first: date | None, last: date | None, today: date) -> tuple[date, date]:
+    """Период архива и выгрузки: по умолчанию последние 7 дней; перепутанные даты меняем местами."""
+    last = min(last or today, today)
+    first = first or last - timedelta(days=6)
+    if first > last:
+        first, last = last, first
+    if (last - first).days >= MAX_RANGE_DAYS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Период не длиннее года")
+    return first, last
+
+
 @router.get("/deals", response_class=HTMLResponse)
-def deals_page(request: Request, user: User, session: Db, view: View = View.OPEN) -> HTMLResponse:
+def deals_page(
+    request: Request,
+    user: User,
+    session: Db,
+    view: View = View.OPEN,
+    first: Annotated[date | None, Query(alias="from")] = None,
+    last: Annotated[date | None, Query(alias="to")] = None,
+) -> HTMLResponse:
     now = datetime.now(UTC)
     today = now.astimezone(MSK).date()
+    first, last = _range(first, last, today)
+    period = day_period(first, last)
     return request.app.state.templates.TemplateResponse(  # type: ignore[no-any-return]
         request,
         "deals.html",
@@ -83,10 +106,12 @@ def deals_page(request: Request, user: User, session: Db, view: View = View.OPEN
             "user": user,
             "view": view,
             "views": VIEW_RU,
-            "counts": view_counts(session, now),
-            "rows": deal_rows(session, view, now),
+            "counts": view_counts(session, now, period),
+            "rows": deal_rows(session, view, now, period),
             "today": today.isoformat(),
-            "week_ago": (today - timedelta(days=6)).isoformat(),
+            "first": first.isoformat(),
+            "last": last.isoformat(),
+            "period_title": period.title,
         },
     )
 
@@ -134,17 +159,20 @@ def deal_file(deal_id: int, file_id: str, user: User, session: Db) -> FileRespon
 def export(
     user: User,
     session: Db,
-    since: Annotated[date | None, Query()] = None,
+    first: Annotated[date | None, Query(alias="from")] = None,
+    last: Annotated[date | None, Query(alias="to")] = None,
 ) -> Response:
+    """Excel за дату или период: сделки, найденные в эти дни, со статусами на момент выгрузки."""
     now = datetime.now(UTC)
-    day = since or now.astimezone(MSK).date()
+    first, last = _range(first, last, now.astimezone(MSK).date())
     try:
         rules = active_rules(session)
         session.commit()
     except (RulesError, ValueError, OSError) as exc:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Файл правил не читается") from exc
-    data, _ = build_report(session, rules, now, datetime.combine(day, time.min, MSK))
-    name = f"zakupshchik-{now.astimezone(MSK):%Y-%m-%d-%H%M}.xlsx"
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Правила не читаются") from exc
+    data, _ = build_report(session, rules, now, day_period(first, last))
+    span = f"{first:%Y-%m-%d}" if first == last else f"{first:%Y-%m-%d}_{last:%Y-%m-%d}"
+    name = f"zakupshchik-{span}.xlsx"
     return Response(
         data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

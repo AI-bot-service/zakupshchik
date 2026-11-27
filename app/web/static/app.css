@@ -366,3 +366,6 @@ code { font-size: var(--fs-sm); background: var(--c-sheet); padding: 1px var(--s
   .save-bar { grid-template-columns: 1fr; }
   .procs th, .procs td { padding-right: var(--sp-2); }
 }
+.btn-small { min-height: 36px; padding: 0 var(--sp-3); font-size: var(--fs-sm); }
+.tag-status { white-space: nowrap; }
+@media (max-width: 640px) { .export { width: 100%; } .export input { flex: 1 1 130px; } }

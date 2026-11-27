@@ -129,5 +129,11 @@ def daily_text(top: list[Deal], total: int, excluded: int, now: datetime, list_u
             out.append(f"    {d.url}")
     else:
         out.append("Разобранных сделок с открытой подачей нет.")
-    out += ["", "Полный список — во вложении (Excel) и на стенде:", list_url]
+    out += [
+        "",
+        "Во вложении два файла: сделки за вчера и сегодня (рабочий) и вся история с первого дня (history).",
+        "Если стенд недоступен, последний файл history — полная копия данных на утро.",
+        "На стенде:",
+        list_url,
+    ]
     return "\n".join(out)
