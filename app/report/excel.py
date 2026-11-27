@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import io
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -26,9 +27,11 @@ from sqlalchemy.orm import Session
 
 from app.core.provenance import BUILD_MARK
 from app.db.models import (
+    Actor,
     ContractFormat,
     Deal,
     DealStatus,
+    DealStatusLog,
     Finding,
     PaymentTerms,
     Platform,
@@ -36,9 +39,10 @@ from app.db.models import (
     TriState,
 )
 from app.pipeline.prefilter import PROCEDURE_RU
+from app.pipeline.status_log import decided_at
+from app.report.stamps import MSK, STAMP_RU, log_line, stamp, verdict
 from app.scoring.rules import Rules
 
-MSK = timezone(timedelta(hours=3), "MSK")
 BLANK_FILL = PatternFill("solid", fgColor="FFF2CC")
 HOT_FILL = PatternFill("solid", fgColor="E2EFDA")
 HEAD_FONT = Font(bold=True)
@@ -50,16 +54,6 @@ MAX_ROW_PT = 300
 WRAP = Alignment(wrap_text=True, vertical="top")
 SHOWN = (DealStatus.HOT, DealStatus.ANALYZED, DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
 ANALYZED_KEY = "analysis"
-STATUS_RU = {
-    DealStatus.NEW: "в очереди на разбор",
-    DealStatus.HOT: "горячая",
-    DealStatus.ANALYZED: "разобрана",
-    DealStatus.TAKEN: "беру",
-    DealStatus.SUBMITTED: "подано",
-    DealStatus.SKIPPED: "не беру",
-    DealStatus.EXPIRED: "срок истёк",
-    DealStatus.FILTERED_OUT: "отсеяна",
-}
 PAYMENT_RU = {
     PaymentTerms.PREPAYMENT: "предоплата",
     PaymentTerms.POSTPAYMENT: "постоплата",
@@ -104,7 +98,7 @@ DEAL_COLUMNS = (
     ("Документы", 9),
     ("Размещено (МСК)", 16),
     ("Найдено (МСК)", 16),
-    ("Статус", 14),
+    ("Статус", 22),
 )
 
 
@@ -259,6 +253,7 @@ def build_report(
     proposals: dict[int, Proposal] = {}
     for p in session.scalars(select(Proposal).where(Proposal.deal_id.in_(ids)).order_by(Proposal.version)):
         proposals[p.deal_id] = p
+    decided = decided_at(session, ids)
 
     wb = Workbook()
     ws = wb.worksheets[0]
@@ -296,7 +291,7 @@ def build_report(
                 len(files) if isinstance(files, list) else 0,
                 _msk(deal.start_at),
                 _msk(deal.created_at),
-                STATUS_RU[deal.status],
+                _stamp(deal, deal.id in proposals, decided.get(deal.id), now),
             ]
         )
         row = ws.max_row
@@ -317,6 +312,9 @@ def build_report(
     ws.auto_filter.ref = ws.dimensions
 
     excluded = _excluded(wb.create_sheet("Исключённые"), session, platforms, scope)
+    _journal(wb.create_sheet("Журнал статусов"), session, scope)
+    if period.deal_id is None:
+        _totals(wb.create_sheet("Итоги"), session, period, deals, proposals, decided, now)
     _how(wb.create_sheet("Как считали"), rules, period, now)
 
     wb.properties.creator = "Закупщик"
@@ -325,6 +323,80 @@ def build_report(
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue(), ReportStats(len(deals), excluded)
+
+
+def _stamp(deal: Deal, has_kp: bool, decided: datetime | None, now: datetime) -> str:
+    st, sub = stamp(deal, verdict(deal), has_kp, decided, now)
+    return f"{STAMP_RU[st]}, {sub}" if sub else STAMP_RU[st]
+
+
+def _journal(ws: Worksheet, session: Session, scope: ColumnElement[bool]) -> None:
+    """Журнал каждой сделки периода: сделки подряд, внутри — по времени."""
+    columns = (
+        ("Сделка (ссылка)", 45),
+        ("Когда (МСК)", 16),
+        ("Было → стало", 30),
+        ("Кто и откуда", 30),
+        ("Причина", 40),
+        ("N из 6, КП, правила", 34),
+    )
+    _header(ws, columns)
+    rows = session.execute(
+        select(DealStatusLog, Deal)
+        .join(Deal, Deal.id == DealStatusLog.deal_id)
+        .where(worked_filter(), scope)
+        .order_by(Deal.id, DealStatusLog.id)
+    ).tuples()
+    for entry, deal in rows:
+        line = log_line(entry)
+        ws.append([deal.title, _msk(entry.at), line.move, line.who, line.reason, line.facts])
+        r = ws.max_row
+        ws.cell(row=r, column=1).hyperlink = deal.url
+        ws.cell(row=r, column=1).font = Font(color="0563C1", underline="single")
+        ws.cell(row=r, column=2).number_format = DATETIME
+        for col in range(1, len(columns) + 1):
+            ws.cell(row=r, column=col).alignment = WRAP
+        _fit_row(ws, r, tuple(w for _, w in columns))
+    ws.auto_filter.ref = ws.dimensions
+
+
+def _totals(
+    ws: Worksheet,
+    session: Session,
+    period: Period,
+    deals: Sequence[Deal],
+    proposals: dict[int, Proposal],
+    decided: dict[int, datetime],
+    now: datetime,
+) -> None:
+    """Сколько сделок с каким штампом сейчас и сколько решений менеджер принял за период (по журналу)."""
+    ws.column_dimensions["A"].width = 40
+    ws.column_dimensions["B"].width = 12
+    ws.append(["Штамп сейчас (лист «Сделки»)", "Сделок"])
+    counts: dict[str, int] = {}
+    for d in deals:
+        st, _ = stamp(d, verdict(d), d.id in proposals, decided.get(d.id), now)
+        counts[STAMP_RU[st]] = counts.get(STAMP_RU[st], 0) + 1
+    for name in STAMP_RU.values():
+        if counts.get(name):
+            ws.append([name, counts[name]])
+    ws.append([])
+    ws.append([f"Решения менеджера за период ({period.title})", "Раз"])
+    q = select(DealStatusLog.to_status, func.count()).where(DealStatusLog.actor == Actor.MANAGER)
+    if period.start is not None:
+        q = q.where(DealStatusLog.at >= period.start)
+    if period.end is not None:
+        q = q.where(DealStatusLog.at < period.end)
+    done = dict(session.execute(q.group_by(DealStatusLog.to_status)).tuples().all())
+    for status, title in (
+        (DealStatus.TAKEN, "Взято в работу"),
+        (DealStatus.SUBMITTED, "КП отправлено"),
+        (DealStatus.SKIPPED, "Отказ"),
+    ):
+        ws.append([title, done.get(status, 0)])
+    for row in (1, len(counts) + 3):
+        ws.cell(row=row, column=1).font = HEAD_FONT
+        ws.cell(row=row, column=2).font = HEAD_FONT
 
 
 def _excluded(

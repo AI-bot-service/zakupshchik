@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Дизайн-схема · Закупщик{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Дизайн-схема</h1>
+    <p class="muted">Досье с печатями: серая бумага, белые листы, чернильные штампы. Громкие здесь только штампы и невыполненные условия, всё остальное спокойное. Значения берутся из tokens.css — их же читают плагин и письма.</p>
+  </div>
+</div>
+
+<div class="ds">
+  <section class="panel" aria-labelledby="ds-color">
+    <h2 id="ds-color">Цвета</h2>
+    <div class="ds-grid">
+      {% for name, var, use in [
+        ('Бумага', '--c-paper', 'фон страницы'),
+        ('Лист', '--c-sheet', 'все блоки'),
+        ('Вкладыш', '--c-inset', 'плитки внутри листа'),
+        ('Чернила', '--c-ink', 'текст'),
+        ('Карандаш', '--c-ink-muted', 'пояснения'),
+        ('Линейка', '--c-rule', 'границы'),
+        ('Штамп', '--c-stamp', 'действие, акцент'),
+        ('Выполнено', '--c-ok', 'условие, «Отправлено»'),
+        ('Нет', '--c-down', 'условие, «Отказ», срок'),
+        ('Пустая цена', '--c-price-empty', 'КП и Excel'),
+        ('Корешок', '--c-spine', 'боковое меню'),
+        ('Метка корешка', '--c-spine-mark', 'текущий раздел'),
+      ] %}
+      <div class="swatch"><i class="sw-{{ var[4:] }}"></i><b>{{ name }}</b><code>{{ var }}</code><span class="muted">{{ use }}</span></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="ds-type">
+    <h2 id="ds-type">Шрифт Manrope, одна гарнитура</h2>
+    <div class="type-scale">
+      <div><code>--fs-2xl</code><span class="ts-2xl">Сделки</span></div>
+      <div><code>--fs-xl</code><span class="ts-xl">18 625 ₽</span></div>
+      <div><code>--fs-lg</code><span class="ts-lg">Условия закупки</span></div>
+      <div><code>--fs-base</code><span>Текст разбора и пояснений, не длиннее 72 знаков в строке.</span></div>
+      <div><code>--fs-sm</code><span class="ts-sm">Подписи, таблицы журналов, меню</span></div>
+      <div><code>--fs-xs</code><span class="ts-xs muted">Причины под плитками, даты на дорожке</span></div>
+    </div>
+    <p class="hint">Сетка отступов 4/8/16/24/32/48/64, радиус один на всё — 6 px, тень одна — у листа.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="ds-stamps">
+    <div class="panel-head">
+      <h2 id="ds-stamps">Штампы: все 10 статусов</h2>
+      <p class="muted">«Архив» — не статус, а вкладка со всей историей: там у каждой сделки свой штамп.</p>
+    </div>
+    <div class="stamp-table">
+      {% for key, title, who, rule in stamps %}
+      <div>
+        <span class="stamp stamp-mini stamp-{{ key }}">{{ title }}</span>
+        <span class="muted">ставит {{ who }}</span>
+        <span>{{ rule }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="hint">Цвет говорит, нужно ли действие: зелёный — хорошо, индиго — решить, чёрный — в работе, красный — остановилась, серый — справочно. Пунктир — робот отсеял до разбора.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="ds-flow">
+    <h2 id="ds-flow">Как меняется статус</h2>
+    <ol class="track">
+      <li class="track-done"><span class="track-dot"></span><b>Найдена</b><span class="track-when">робот, сбор</span></li>
+      <li class="track-done"><span class="track-dot"></span><b>Разобрана</b><span class="track-when">робот, N из 6</span></li>
+      <li class="track-now"><span class="track-dot"></span><b>В работе</b><span class="track-when">менеджер</span></li>
+      <li class="track-next"><span class="track-dot"></span><b>КП отправлено</b><span class="track-when">менеджер</span></li>
+    </ol>
+    <div class="flowmap">
+      <div><b>Найдена</b><span>→</span><span>робот разбирает документы; если не прошла правила — «Отсеяна», кнопок нет. Менеджер может сразу отказаться.</span></div>
+      <div><b>Разобрана</b><span>→</span><span>«Беру в работу» — робот собирает КП; «Не беру» — с причиной.</span></div>
+      <div><b>В работе</b><span>→</span><span>«КП отправлено» — только когда КП лежит в карточке (робота или своё). «Не беру» доступно и после срока.</span></div>
+      <div><b>КП отправлено</b><span>→</span><span>«Вернуть в работу», если отметили по ошибке.</span></div>
+      <div><b>Отказ</b><span>→</span><span>«Вернуть в работу», пока идёт приём КП; «Изменить причину» — новая строка в журнале.</span></div>
+      <div><b>Срок прошёл</b><span>→</span><span>робот ставит «Приём закрыт», а у сделки в работе — «Срок вышел». Кнопки только у «Срок вышел»: отметить отправку или отказ.</span></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="ds-parts">
+    <h2 id="ds-parts">Детали</h2>
+    <div class="ds-row">
+      <button class="btn btn-primary" type="button">Беру в работу</button>
+      <button class="btn btn-quiet" type="button">Не беру</button>
+      <span class="mark"><b>5</b><small>из 6</small></span>
+      <span class="tag tag-kp">КП готово</span>
+    </div>
+    <ol class="conds">
+      <li><span class="cond-mark">✓</span><b>Каталог</b><span class="cond-text">все позиции есть в каталоге</span></li>
+      <li><span class="cond-mark">✓</span><b>Сумма</b><span class="cond-text">НМЦ до 1 млн ₽</span></li>
+      <li><span class="cond-mark">✓</span><b>Простая</b><span class="cond-text">без конкурса и обеспечения</span></li>
+      <li><span class="cond-mark">✓</span><b>Оплата</b><span class="cond-text">постоплата 7 дн.</span></li>
+      <li><span class="cond-mark">✓</span><b>Срок</b><span class="cond-text">Успеваем подать</span></li>
+      <li class="is-unmet"><span class="cond-mark">✗</span><b>Цена</b><span class="cond-text">по каталогу 20 537 ₽ — больше НМЦ</span></li>
+    </ol>
+  </section>
+</div>
+{% endblock %}

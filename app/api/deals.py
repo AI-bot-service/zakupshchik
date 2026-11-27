@@ -5,18 +5,21 @@ from __future__ import annotations
 import secrets
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.api.auth import require_user
-from app.db.models import Deal, DealStatus, Feedback
+from app.db.models import Actor, Channel, Deal, DealStatus, Platform, ProposalStatus
 from app.db.session import get_session
-from app.pipeline.proposals import request_kp
-from app.report.excel import ALL_TIME, MSK, build_report, day_period
+from app.pipeline.proposals import KP_MAX_BYTES, KP_SUFFIXES, attach_manager_kp, latest_proposal, request_kp
+from app.pipeline.status_log import Who, change_status
+from app.report.excel import ALL_TIME, build_report, day_period
+from app.report.stamps import MSK
 from app.scoring.rules import RulesError
 from app.scoring.store import active_rules
 from app.web.view import (
@@ -53,21 +56,52 @@ def check_csrf(request: Request, token: str) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Форма устарела, обновите страницу")
 
 
+NO_KP = (
+    "КП в карточке нет. Нажмите «Беру в работу» — робот соберёт КП, "
+    "или приложите своё КП в карточке на стенде."
+)
+
+
 def apply_status(
-    session: Session, deal: Deal, action: DealStatus, reason: str, manager_id: int | None
+    session: Session,
+    deal: Deal,
+    action: DealStatus,
+    reason: str,
+    who: Who,
+    details: dict[str, Any] | None = None,
 ) -> Deal:
-    """Решение менеджера со стенда, из плагина или письма: статус сделки + запись в feedback."""
+    """Решение менеджера со стенда или из плагина: статус сделки + строка в журнале сделки.
+
+    Повтор того же решения (второй «Беру в работу») ничего не меняет и в журнал не пишется: КП уже заказано.
+    Исключения: «Не беру» с новой причиной и новое своё КП (details) — пишутся.
+    «КП отправлено» без КП в карточке — 409: сначала собрать КП или приложить своё.
+    """
     if action not in MANAGER_ACTIONS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Такого статуса нет")
     reason = reason.strip()
     if action is DealStatus.SKIPPED and not reason:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Напишите, почему не берёте сделку")
-    deal.status = action
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Укажите причину отказа")
+    if action is DealStatus.TAKEN and deal.conditions_met is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Сделка ещё не разобрана роботом — КП собрать не из чего"
+        )
+    again = action is deal.status and (action is DealStatus.SKIPPED or bool(details))
+    if action is deal.status and not again:
+        return deal
+    proposal = latest_proposal(session, deal.id)
+    if action is DealStatus.SUBMITTED:
+        if proposal is None:
+            raise HTTPException(status.HTTP_409_CONFLICT, NO_KP)
+        proposal.status = ProposalStatus.SENT
     if action is DealStatus.TAKEN:
         request_kp(deal)  # воркер соберёт КП по разбору в течение ~10 с, даже если сделка не на 100%
-    session.add(Feedback(deal_id=deal.id, manager_id=manager_id, action=action, reason=reason or None))
+    change_status(session, deal, action, who, reason, proposal, details, always=again)
     session.commit()
     return deal
+
+
+def stand(user: str) -> Who:
+    return Who(Actor.MANAGER, user, Channel.STAND)
 
 
 def get_deal(session: Session, deal_id: int) -> Deal:
@@ -166,9 +200,45 @@ def set_status(
     reason: Annotated[str, Form(max_length=500)] = "",
 ) -> RedirectResponse:
     check_csrf(request, csrf)
-    deal = apply_status(session, get_deal(session, deal_id), action, reason, None)
+    try:
+        deal = apply_status(session, get_deal(session, deal_id), action, reason, stand(user))
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_409_CONFLICT:
+            raise
+        return RedirectResponse(f"/deals/{deal_id}?need_kp=1#decide", status_code=status.HTTP_303_SEE_OTHER)
     log.info("deal_status", deal_id=deal.id, action=action.value, user=user)
-    return RedirectResponse(f"/deals/{deal.id}?saved=1", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(f"/deals/{deal.id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/deals/{deal_id}/kp")
+async def upload_kp(
+    request: Request,
+    deal_id: int,
+    user: User,
+    session: Db,
+    kp: Annotated[UploadFile, File()],
+    csrf: Annotated[str, Form(max_length=64)],
+) -> RedirectResponse:
+    """Своё КП менеджера: кладём в карточку новой версией и сразу отмечаем «КП отправлено»."""
+    check_csrf(request, csrf)
+    deal = get_deal(session, deal_id)
+    name = kp.filename or ""
+    if Path(name).suffix.lower() not in KP_SUFFIXES:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "КП в формате DOCX, DOC, PDF, ODT или XLSX"
+        )
+    data = await kp.read(KP_MAX_BYTES + 1)
+    if not data:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Файл пустой")
+    if len(data) > KP_MAX_BYTES:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "Файл больше 20 МБ")
+    platform = session.get(Platform, deal.platform_id)
+    attach_manager_kp(session, deal, platform.code if platform else "platform", name, data, datetime.now(UTC))
+    session.flush()
+    details = {"kp_file": Path(name).name[:200], "kp_bytes": len(data), "kp_source": "manager"}
+    apply_status(session, deal, DealStatus.SUBMITTED, "своё КП менеджера", stand(user), details)
+    log.info("deal_kp_uploaded", deal_id=deal.id, size=len(data), user=user)
+    return RedirectResponse(f"/deals/{deal.id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/deals/{deal_id}/files/{file_id}")

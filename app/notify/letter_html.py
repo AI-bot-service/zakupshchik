@@ -11,7 +11,8 @@ from typing import Any
 
 from app.notify.letters import DealLetter, rub
 from app.pipeline.prefilter import PROCEDURE_RU
-from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU
+from app.report.excel import CONTRACT_RU, PAYMENT_RU
+from app.report.stamps import MSK
 from app.scoring.rules import Rules
 from app.scoring.score import CONDITIONS_TOTAL, catalog_met
 

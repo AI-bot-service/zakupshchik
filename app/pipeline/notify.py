@@ -34,7 +34,8 @@ from app.notify.letters import DealLetter, daily_text, deal_subject, deal_text
 from app.notify.postbox import Attachment, Mailer, MailError
 from app.pipeline.analysis import catalog_items
 from app.pipeline.attachments import AttachmentError, download_file
-from app.report.excel import ALL_TIME, MSK, Period, build_report
+from app.report.excel import ALL_TIME, Period, build_report
+from app.report.stamps import MSK
 from app.scoring.rules import Rules
 
 log = structlog.get_logger()

@@ -16,7 +16,7 @@ from app.db.models import RulesVersion
 from app.db.session import get_session
 from app.pipeline.analysis import rescore
 from app.pipeline.prefilter import PROCEDURE_RU
-from app.report.excel import MSK
+from app.report.stamps import MSK
 from app.scoring.rules import Rules, RulesError, RulesFieldError
 from app.scoring.store import active_rules, history, save_rules
 from app.web.rules_form import GROUPS, PROC_CHOICES, PROCEDURES, diff, form_values, label, parse_form

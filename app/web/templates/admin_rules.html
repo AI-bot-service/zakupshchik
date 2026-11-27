@@ -38,7 +38,7 @@
   <form method="post" action="/admin/rules" class="rules-form">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     {% for g in groups %}
-    <section class="sheet rule-group">
+    <section class="panel rule-group">
       <h2>{{ g.title }}</h2>
       <p class="muted">{{ g.hint }}</p>
       {% if g.items %}
@@ -78,7 +78,7 @@
     </div>
   </form>
 
-  <aside class="sheet side-block history-block">
+  <aside class="panel history-block">
     <h2>История версий</h2>
     <ol class="versions">
       {% for v in versions %}

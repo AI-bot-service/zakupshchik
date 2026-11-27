@@ -76,3 +76,31 @@ def status_page(request: Request, report: Annotated[StatusReport, Depends(collec
     return templates.TemplateResponse(  # type: ignore[no-any-return]
         request, "status.html", {"report": report, "user": current_user(request)}
     )
+
+
+STAMP_RULES = (
+    ("wait", "Ещё разбираем", "робот", "Закупка прошла отбор, агент ещё читает документы."),
+    ("take", "Стоит взять", "робот", "Выполнены все 6 условий."),
+    ("decide", "Нужно ваше решение", "робот", "5 из 6, а если позиций нет в каталоге — от 4."),
+    ("skip", "Не берём", "робот", "4 и меньше из 6. Сделка остаётся во «Всех разобранных», её можно взять."),
+    (
+        "filtered",
+        "Отсеяна",
+        "робот",
+        "Не прошла отбор по правилам: способ, сумма, стоп-слова. До разбора не дошла.",
+    ),
+    ("work", "В работе", "менеджер", "«Беру в работу»: робот собирает КП, напоминания прекращаются."),
+    ("sent", "Отправлено", "менеджер", "«КП отправлено»: КП ушло заказчику, на штампе дата."),
+    ("declined", "Отказ", "менеджер", "«Не беру» с причиной, она сохраняется в журнале сделки."),
+    ("late", "Срок вышел", "робот", "Сделка была в работе, но приём закрылся без отметки «КП отправлено»."),
+    ("closed", "Приём закрыт", "робот", "Срок подачи прошёл, решения по сделке не было."),
+)
+
+
+@router.get("/design", response_class=HTMLResponse)
+def design_page(request: Request) -> HTMLResponse:
+    """Дизайн-схема стенда: токены, компоненты, все штампы и как сделка переходит между ними."""
+    templates = request.app.state.templates
+    return templates.TemplateResponse(  # type: ignore[no-any-return]
+        request, "design.html", {"stamps": STAMP_RULES, "user": current_user(request)}
+    )

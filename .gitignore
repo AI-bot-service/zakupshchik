@@ -13,3 +13,5 @@ node_modules/
 extension/dist/
 *.key
 *.pem
+
+graphify-out/

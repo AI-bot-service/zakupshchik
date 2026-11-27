@@ -12,7 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.catalog.vendors import VendorIndex
 from app.db.models import Deal, DealStatus, Law, Procedure, TriState
+from app.pipeline.status_log import change_status, robot
 from app.scoring.rules import Rules
+
+WHO = robot("отбор по правилам")
 
 # Название продукта в кавычках: «Куб CMS», "ТехноКад", „АЖУР“
 _QUOTED = re.compile(r"[«\"„“]([^«»\"„“”]{2,60})[»\"“”]")
@@ -142,12 +145,15 @@ def run_prefilter(session: Session, rules: Rules, vendors: VendorIndex, now: dat
             "prefilter": {"cut": verdict.cut, "risks": verdict.risks, "vendors": verdict.vendors},
         }
         if verdict.expired:
-            deal.status, deal.filter_reason = DealStatus.EXPIRED, verdict.cut[0]
+            deal.filter_reason = verdict.cut[0]
+            change_status(session, deal, DealStatus.EXPIRED, WHO, deal.filter_reason)
             stats["expired"] += 1
         elif verdict.cut:
-            deal.status, deal.filter_reason = DealStatus.FILTERED_OUT, "; ".join(verdict.cut)
+            deal.filter_reason = "; ".join(verdict.cut)
+            change_status(session, deal, DealStatus.FILTERED_OUT, WHO, deal.filter_reason)
             stats["filtered_out"] += 1
         else:
-            deal.status, deal.filter_reason = DealStatus.NEW, None
+            deal.filter_reason = None
+            change_status(session, deal, DealStatus.NEW, WHO, "прошла отбор по новым правилам")
             stats["passed"] += 1
     return stats

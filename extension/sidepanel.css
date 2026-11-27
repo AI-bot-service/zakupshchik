@@ -31,7 +31,7 @@ main { padding: var(--sp-3) var(--sp-3) calc(var(--sp-3) + 36px); display: grid;
 
 .alert { display: grid; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--c-down-soft); color: var(--c-down); font-weight: 600; }
 .alert .btn { justify-self: start; }
-.saved { padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--c-ok-soft); color: var(--c-ok); font-weight: 700; }
+.need-kp { padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--c-down); border-radius: 0 var(--radius) var(--radius) 0; background: var(--c-down-soft); color: var(--c-down); font-weight: 600; }
 .empty { padding: var(--sp-3); background: var(--c-sheet); border-radius: var(--radius); }
 
 .setup { display: grid; gap: var(--sp-3); }
@@ -64,7 +64,10 @@ input:focus, select:focus { border-color: var(--c-stamp); outline: none; box-sha
 .stamp-date { font-size: 0.8125rem; }
 .stamp-take { color: var(--c-ok); }
 .stamp-decide { color: var(--c-stamp); }
-.stamp-skip, .stamp-wait { color: var(--c-ink-muted); }
+.stamp-skip, .stamp-wait, .stamp-filtered, .stamp-declined, .stamp-closed { color: var(--c-ink-muted); }
+.stamp-work { color: var(--c-ink); }
+.stamp-sent { color: var(--c-ok); }
+.stamp-late { color: var(--c-down); }
 @keyframes stamp-in { from { opacity: 0; transform: rotate(-3deg) scale(1.25); } to { opacity: 1; transform: rotate(-3deg) scale(1); } }
 
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-3); margin: 0; padding: var(--sp-3); background: var(--c-sheet); border-radius: var(--radius); box-shadow: var(--shadow); }
@@ -95,3 +98,6 @@ details summary { cursor: pointer; font-weight: 600; color: var(--c-stamp); }
 
 .hint { margin: calc(-1 * var(--sp-1)) 0 var(--sp-1); font-size: var(--fs-sm); line-height: var(--lh-base); color: var(--c-ink-muted); }
 .foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1; padding: var(--sp-2) var(--sp-3); background: var(--c-sheet); border-top: 1px solid var(--c-rule); font-size: 0.75rem; line-height: 1.3; }
+.status-log { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); font-size: 0.8125rem; }
+.status-log li { display: grid; gap: 2px; padding-left: var(--sp-2); border-left: 2px solid var(--c-rule); }
+.status-log li.is-manager { border-left-color: var(--c-stamp); }

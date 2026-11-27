@@ -6,22 +6,28 @@
   <meta name="generator" content="Закупщик {{ build_mark }}">
   <title>{% block title %}Закупщик{% endblock %}</title>
   <link rel="preload" href="/static/fonts/manrope-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/tokens.css">
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/tokens.css?v={{ asset_v }}">
+  <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
   {% block head %}{% endblock %}
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">Закупщик</a>
-    <nav aria-label="Разделы">
-      {% if user %}<a href="/deals">Сделки</a><a href="/extension">Плагин</a><a href="/journal">Журнал</a><a href="/admin/rules">Админка</a>{% endif %}
-      <a href="/status">Состояние стенда</a>
-      {% if user %}
-      <form method="post" action="/logout"><button class="btn btn-quiet" type="submit">Выйти</button></form>
-      {% endif %}
+{% macro nav(href, title) %}<a href="{{ href }}"{% if request.url.path == href or request.url.path.startswith(href ~ '/') %} aria-current="page"{% endif %}>{{ title }}</a>{% endmacro %}
+<div class="shell">
+  <aside class="spine">
+    <a class="brand" href="/"><span class="brand-seal" aria-hidden="true">З</span><span>Закупщик<small>робот закупок ПО</small></span></a>
+    <nav class="spine-nav" aria-label="Разделы">
+      {% if user %}{{ nav('/deals', 'Сделки') }}{{ nav('/journal', 'Журнал') }}{{ nav('/admin/rules', 'Админка') }}{{ nav('/extension', 'Плагин') }}{% endif %}
+      {{ nav('/status', 'Состояние стенда') }}
+      {{ nav('/design', 'Дизайн-схема') }}
     </nav>
-  </header>
-  <main>{% block content %}{% endblock %}</main>
-  <footer class="footer">Прототип для хакатона «ИИкузница» 2026. Сборка {{ build_mark }}.</footer>
+    {% if user %}
+    <form class="spine-out" method="post" action="/logout"><button type="submit">Выйти <span>{{ user }}</span></button></form>
+    {% endif %}
+  </aside>
+  <div class="page">
+    <main>{% block content %}{% endblock %}</main>
+    <footer class="footer">Прототип для хакатона «ИИкузница» 2026. Сборка {{ build_mark }}.</footer>
+  </div>
+</div>
 </body>
 </html>

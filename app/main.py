@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -44,6 +45,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.session_factory = make_session_factory(app.state.engine)
     templates = Jinja2Templates(directory=WEB_DIR / "templates")
     templates.env.globals["build_mark"] = BUILD_MARK
+    # версия стилей по содержимому: новый CSS — новый адрес, браузер не держит старый из кэша
+    templates.env.globals["asset_v"] = hashlib.sha256(
+        b"".join((WEB_DIR / "static" / f).read_bytes() for f in ("tokens.css", "app.css"))
+    ).hexdigest()[:10]
     templates.env.filters["msk"] = format_msk
     templates.env.filters["dmy"] = lambda iso: f"{iso[8:10]}.{iso[5:7]}.{iso[:4]}"
     app.state.templates = templates

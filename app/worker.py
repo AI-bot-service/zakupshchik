@@ -31,7 +31,7 @@ from app.db.session import make_engine, make_session_factory
 from app.notify.postbox import MailError, PostboxMailer
 from app.pipeline.analysis import Models, refresh_explanations, rescore, run_analysis
 from app.pipeline.notify import NotifyRun, daily_report, notify_deals
-from app.pipeline.proposals import make_proposals
+from app.pipeline.proposals import adopt_manager_kp, make_proposals
 from app.pipeline.runs import finish, take_pending
 from app.scoring.rules import Rules, RulesError
 from app.scoring.store import active_rules
@@ -197,7 +197,10 @@ def requested_proposals(factory: sessionmaker[Session]) -> None:
     """КП по «Беру в работу»: опрос раз в 10 с, чтобы файл появился в карточке почти сразу."""
     try:
         with factory.begin() as session:
+            adopted = adopt_manager_kp(session)
             run = make_proposals(session, active_rules(session), datetime.now(UTC), only_requested=True)
+        if adopted:
+            log.info("kp_manager_adopted", moved=adopted)
     except Exception as exc:  # сбой одной сделки не роняет воркер
         log.exception("kp_request_failed", error=type(exc).__name__)
         return

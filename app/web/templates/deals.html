@@ -42,9 +42,8 @@
         <span class="deal-amount">{{ r.amount }}</span>
         <span class="deal-left {{ 'is-urgent' if r.urgent }}">{{ r.left }}</span>
         <span class="deal-tags">
-          {% if r.status.value != 'filtered_out' %}<span class="tag tag-{{ r.verdict.value }}">{{ r.verdict_ru }}</span>{% endif %}
-          {% if r.status.value in ('taken', 'submitted', 'skipped', 'expired', 'filtered_out') %}<span class="tag tag-status">{{ r.status_ru }}</span>{% endif %}
-          {% if r.has_kp %}<span class="tag tag-kp">КП готово</span>{% endif %}
+          <span class="stamp stamp-mini stamp-{{ r.stamp.value }}">{{ r.stamp_ru }}{% if r.stamp.value in ('sent', 'declined') and r.stamp_sub %} {{ r.stamp_sub[:5] }}{% endif %}</span>
+          {% if r.has_kp and r.stamp.value != 'sent' %}<span class="tag tag-kp">КП готово</span>{% endif %}
         </span>
       </span>
     </a>
@@ -52,7 +51,7 @@
   {% endfor %}
 </ol>
 {% else %}
-<section class="sheet empty">
+<section class="panel empty">
   {% if period_dates and view.value != 'archive' %}
   <h2>На этой вкладке нет сделок, размещённых {{ period_dates }}</h2>
   <p>Выберите другой период выше или <a href="/deals?view={{ view.value }}">сбросьте даты</a>.</p>

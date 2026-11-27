@@ -199,15 +199,16 @@ function fileList(dealId, files) {
 
 function decision(card) {
   const r = card.row;
-  const note = h("p", { class: "muted", role: "status" }, `Сейчас: ${r.status_ru}.`);
+  const note = h("p", { class: "muted", role: "status" }, "Робот заявку не подаёт и КП заказчику не отправляет.");
   const send = async (action, reason = "") => {
     note.textContent = "Сохраняем…";
     try {
       await api(`/api/ext/deals/${r.id}/status`, { method: "POST", body: { action, reason } });
       await chrome.runtime.sendMessage("poll");
-      await openDeal(r.id, pinned, "Решение сохранено и видно на стенде.");
+      await openDeal(r.id, pinned);
     } catch (e) {
       note.textContent = e.message;
+      note.className = e instanceof ApiError && e.status === 409 ? "need-kp" : "muted";
     }
   };
   const select = h("select", { id: "reason", required: true }, h("option", { value: "" }, "Выберите причину"), SKIP_REASONS.map((x) => h("option", { value: x }, x)));
@@ -218,10 +219,19 @@ function decision(card) {
     { class: "sheet decide" },
     h("h2", {}, "Ваше решение"),
     note,
-    h("button", { class: "btn btn-primary", type: "button", onclick: () => send("taken") }, "Беру в работу"),
-    h("p", { class: "hint" }, "Робот сразу собирает КП по разбору — аналоги, позиции вне каталога и пустые цены тоже — и кладёт в блок «Коммерческое предложение». Вы проверяете цены и подаёте. Напоминания о сделке прекращаются, статус «беру»."),
-    h("button", { class: "btn btn-quiet", type: "button", onclick: () => send("submitted") }, "КП подано"),
-    h("p", { class: "hint" }, "КП отправлено заказчику на площадке. Статус «подано» — по нему видно, сколько КП подано за период."),
+    r.status === "submitted"
+      ? [
+          h("p", {}, `КП отправлено заказчику ${r.stamp_sub}.`),
+          h("button", { class: "btn btn-quiet", type: "button", onclick: () => send("taken") }, "Вернуть в работу"),
+          h("p", { class: "hint" }, "Если отметили по ошибке. КП в карточке остаётся."),
+        ]
+      : [
+          r.status !== "taken" && h("button", { class: "btn btn-primary", type: "button", onclick: () => send("taken") }, "Беру в работу"),
+          r.status !== "taken" && h("p", { class: "hint" }, "Робот собирает КП по разбору — аналоги, позиции вне каталога и пустые цены тоже — и кладёт в блок «Коммерческое предложение». Напоминания о сделке прекращаются, на штампе «В работе»."),
+          h("button", { class: `btn ${r.status === "taken" ? "btn-primary" : "btn-quiet"}`, type: "button", onclick: () => send("submitted") }, "КП отправлено"),
+          h("p", { class: "hint" }, "Вы отправили КП заказчику на площадке. На штампе «Отправлено» и дата. Если КП в карточке нет — подскажем, как его собрать или приложить своё."),
+        ],
+    r.status !== "submitted" &&
     h(
       "details",
       {},
@@ -243,11 +253,10 @@ function decision(card) {
         h("button", { class: "btn btn-quiet", type: "submit" }, "Отметить «не беру»"),
       ),
     ),
-    h("p", { class: "muted small" }, "Робот заявку не подаёт и КП заказчику не отправляет."),
   );
 }
 
-function renderCard(card, flash) {
+function renderCard(card) {
   const r = card.row;
   current = r.id;
   checked.textContent = "";
@@ -258,8 +267,7 @@ function renderCard(card, flash) {
       : "не сравнивали";
   show(
     h("button", { class: "link back", type: "button", onclick: renderList }, "Все сделки"),
-    flash && h("p", { class: "saved", role: "status" }, flash),
-    h("div", { class: `stamp stamp-${r.verdict}` }, h("span", { class: "stamp-main" }, r.verdict_ru), h("span", { class: "stamp-date" }, r.n === null ? r.status_ru : `${r.n} из 6 условий`)),
+    h("div", { class: `stamp stamp-${r.stamp}` }, h("span", { class: "stamp-main" }, r.stamp_ru), r.stamp_sub && h("span", { class: "stamp-date" }, r.stamp_sub)),
     h("h1", {}, r.subject),
     h("p", { class: "muted" }, r.customer),
     h(
@@ -275,6 +283,25 @@ function renderCard(card, flash) {
     (card.why.length || card.check) &&
       h("section", {}, h("h2", {}, "Почему так"), h("ul", { class: "why" }, card.why.map((w) => h("li", {}, w))), card.check && h("p", { class: "check" }, h("b", {}, "Проверить: "), card.check)),
     decision(card),
+    card.history.length &&
+      h(
+        "section",
+        {},
+        h("h2", {}, "Журнал сделки"),
+        h(
+          "ol",
+          { class: "status-log" },
+          card.history.slice(0, 6).map((e) =>
+            h(
+              "li",
+              { class: e.manager ? "is-manager" : "" },
+              h("span", { class: "muted" }, `${e.at_msk} · ${e.who}`),
+              h("span", {}, h("b", {}, e.move), e.reason ? `: ${e.reason}` : ""),
+            ),
+          ),
+        ),
+        card.history.length > 6 && h("p", { class: "muted small" }, "Весь журнал — в карточке на стенде."),
+      ),
     h(
       "section",
       { class: "sheet" },
@@ -322,10 +349,10 @@ function renderCard(card, flash) {
   );
 }
 
-async function openDeal(id, byHand = false, flash = "") {
+async function openDeal(id, byHand = false) {
   pinned = byHand;
   try {
-    renderCard(await (await api(`/api/ext/deals/${id}`)).json(), flash);
+    renderCard(await (await api(`/api/ext/deals/${id}`)).json());
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return onboarding(e.message);
     show(errorBox(e.message, () => openDeal(id, byHand)));

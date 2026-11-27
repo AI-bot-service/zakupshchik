@@ -33,8 +33,9 @@ from app.agent.llm import LLM
 from app.agent.schemas import Analysis
 from app.catalog.vendors import VendorIndex
 from app.db.models import CatalogItem, Deal, DealStatus, Finding, Platform, TriState
+from app.pipeline.status_log import Who, change_status, robot
 from app.scoring.rules import Rules
-from app.scoring.score import DealView, ScoreResult, evaluate
+from app.scoring.score import CONDITIONS_TOTAL, DealView, ScoreResult, evaluate
 
 log = structlog.get_logger("analysis")
 ANALYZED = (DealStatus.ANALYZED, DealStatus.HOT)
@@ -104,11 +105,18 @@ def explain_facts(
     }
 
 
-def _apply_score(session: Session, deal: Deal, analysis: Analysis, result: ScoreResult, rules: Rules) -> None:
+WHO_AGENT = robot("разбор агентом")
+WHO_SCORE = robot("пересчёт по правилам")
+
+
+def _apply_score(
+    session: Session, deal: Deal, analysis: Analysis, result: ScoreResult, rules: Rules, who: Who
+) -> None:
     deal.conditions_met = result.n
     deal.score = Decimal(str(result.score))
-    deal.status = DealStatus.HOT if result.hot else DealStatus.ANALYZED
     deal.rules_version = rules.version
+    to = DealStatus.HOT if result.hot else DealStatus.ANALYZED
+    change_status(session, deal, to, who, f"{result.n} из {CONDITIONS_TOTAL} условий")
     deal.payment_terms = analysis.payment_terms
     deal.payment_days = analysis.payment_days
     deal.contract_format = analysis.contract_format
@@ -214,14 +222,16 @@ def run_analysis(
             run.cost_rub += res.cost_rub
             _save_agent(deal, res, models.main)
             if res.analysis is None:
-                deal.status = DealStatus.ANALYZED
                 deal.conditions_met = None
+                change_status(
+                    session, deal, DealStatus.ANALYZED, WHO_AGENT, "нужен человек: агент не разобрал"
+                )
                 run.needs_human += 1
                 journal.add("agent", output={"needs_human": res.needs_human})
                 continue
             items = catalog_items(session, res.analysis)
             result = evaluate(deal_view(deal), res.analysis, items, rules, now)
-            _apply_score(session, deal, res.analysis, result, rules)
+            _apply_score(session, deal, res.analysis, result, rules, WHO_AGENT)
             expl = explain(
                 llm, models.cheap, explain_facts(deal, res.analysis, result, items), result, journal
             )
@@ -241,7 +251,7 @@ def rescore(session: Session, rules: Rules, now: datetime) -> dict[str, int]:
     deals = session.scalars(select(Deal).where(Deal.status.in_(ANALYZED))).all()
     for deal in deals:
         if deal.end_at is not None and deal.end_at <= now:
-            deal.status = DealStatus.EXPIRED
+            change_status(session, deal, DealStatus.EXPIRED, WHO_SCORE, "приём КП закончился")
             stats["expired"] += 1
             continue
         raw = (deal.score_breakdown.get("analysis") or {}).get("result")
@@ -251,7 +261,7 @@ def rescore(session: Session, rules: Rules, now: datetime) -> dict[str, int]:
         before = (deal.conditions_met, deal.status)
         items = catalog_items(session, analysis)
         result = evaluate(deal_view(deal), analysis, items, rules, now)
-        _apply_score(session, deal, analysis, result, rules)
+        _apply_score(session, deal, analysis, result, rules, WHO_SCORE)
         stats["rescored"] += 1
         if (deal.conditions_met, deal.status) != before:
             stats["changed"] += 1

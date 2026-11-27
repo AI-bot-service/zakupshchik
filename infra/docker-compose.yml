@@ -106,6 +106,8 @@ services:
       JURY_PASSWORD: ${JURY_PASSWORD:?нужен JURY_PASSWORD}
     volumes:
       - ../data/files:/app/data/files:ro
+      # своё КП менеджера — единственная запись приложения (папка uid 10001)
+      - ../data/files/_manager:/app/data/files/_manager
     mem_limit: 512m
     memswap_limit: 512m
     restart: unless-stopped

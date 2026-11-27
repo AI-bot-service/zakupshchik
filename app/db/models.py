@@ -116,6 +116,17 @@ class ProposalStatus(StrEnum):
     SENT = "sent"
 
 
+class Actor(StrEnum):
+    MANAGER = "manager"
+    ROBOT = "robot"
+
+
+class Channel(StrEnum):
+    STAND = "stand"
+    EXTENSION = "extension"
+    WORKER = "worker"
+
+
 class NotifyChannel(StrEnum):
     EMAIL_DEAL = "email_deal"
     EMAIL_DAILY = "email_daily"
@@ -302,8 +313,21 @@ class Manager(Timestamps, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     email: Mapped[str | None] = mapped_column(String(255))
-    # Ключ плагина хранится только хэшем; отзыв = обнуление.
-    ext_key_hash: Mapped[str | None] = mapped_column(String(128), unique=True)
+
+
+class ExtKey(Base):
+    """Ключ плагина: по одному на устройство, хранится только хэш. Новый ключ старые не отзывает."""
+
+    __tablename__ = "ext_key"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    manager_id: Mapped[int] = mapped_column(ForeignKey("manager.id", ondelete="CASCADE"), index=True)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    label: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    manager: Mapped[Manager] = relationship()
 
 
 class Proposal(Timestamps, Base):
@@ -320,14 +344,28 @@ class Proposal(Timestamps, Base):
     file_path: Mapped[str | None] = mapped_column(Text)
 
 
-class Feedback(Timestamps, Base):
-    __tablename__ = "feedback"
+class DealStatusLog(Base):
+    """Журнал смены статуса: кто (менеджер или робот), откуда, с чем на руках (N из 6, КП, правила)."""
+
+    __tablename__ = "deal_status_log"
+    __table_args__ = (Index("ix_deal_status_log_at", "at"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     deal_id: Mapped[int] = mapped_column(ForeignKey("deal.id", ondelete="CASCADE"), index=True)
-    manager_id: Mapped[int | None] = mapped_column(ForeignKey("manager.id", ondelete="SET NULL"))
-    action: Mapped[DealStatus] = mapped_column(_enum(DealStatus))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    from_status: Mapped[DealStatus | None] = mapped_column(_enum(DealStatus))
+    to_status: Mapped[DealStatus] = mapped_column(_enum(DealStatus))
+    actor: Mapped[Actor] = mapped_column(_enum(Actor))
+    actor_name: Mapped[str] = mapped_column(String(255))  # логин менеджера или шаг робота
+    channel: Mapped[Channel] = mapped_column(_enum(Channel))
+    device: Mapped[str | None] = mapped_column(String(80))  # подпись ключа плагина
     reason: Mapped[str | None] = mapped_column(Text)
+    conditions_met: Mapped[int | None] = mapped_column(Integer)
+    rules_version: Mapped[str | None] = mapped_column(String(64))
+    proposal_id: Mapped[int | None] = mapped_column(ForeignKey("proposal.id", ondelete="SET NULL"))
+    proposal_version: Mapped[int | None] = mapped_column(Integer)
+    details: Mapped[dict[str, Any]] = mapped_column(default=dict)
+    deal: Mapped[Deal] = relationship()
 
 
 class AgentStep(Base):

@@ -13,7 +13,8 @@ from typing import Any
 from app.agent.schemas import Analysis
 from app.db.models import CatalogItem, Deal
 from app.pipeline.prefilter import PROCEDURE_RU
-from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU, TRI_RU
+from app.report.excel import CONTRACT_RU, PAYMENT_RU, TRI_RU
+from app.report.stamps import MSK
 from app.scoring.score import catalog_met
 
 

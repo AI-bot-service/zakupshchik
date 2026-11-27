@@ -15,34 +15,46 @@ from sqlalchemy.orm import Session
 
 from app.agent.schemas import Analysis
 from app.db.models import (
+    Actor,
     AgentStep,
     CatalogItem,
     Deal,
     DealFile,
     DealStatus,
-    Feedback,
+    DealStatusLog,
     Finding,
     MatchKind,
     Platform,
     Proposal,
 )
+from app.notify.letter_html import SHORT
 from app.notify.letters import rub, short_rub
 from app.pipeline.prefilter import PROCEDURE_RU
-from app.report.excel import (
-    CONTRACT_RU,
+from app.pipeline.status_log import decided_at
+from app.report.excel import CONTRACT_RU, PAYMENT_RU, TRI_RU, Period, worked_filter
+from app.report.stamps import (
     MSK,
-    PAYMENT_RU,
+    STAMP_RU,
     STATUS_RU,
-    TRI_RU,
-    Period,
-    worked_filter,
+    VERDICT_RU,
+    LogLine,
+    Stamp,
+    Verdict,
+    log_line,
+    msk,
+    stamp,
+    verdict,
 )
-from app.scoring.score import CONDITIONS_TOTAL, catalog_met
+from app.scoring.score import catalog_met
 
 FILES_ROOT = Path("/app/data/files")
 WORKED = (DealStatus.HOT, DealStatus.ANALYZED, DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
 MANAGER_ACTIONS = (DealStatus.TAKEN, DealStatus.SUBMITTED, DealStatus.SKIPPED)
-ACTION_RU = {DealStatus.TAKEN: "Беру", DealStatus.SUBMITTED: "Подано", DealStatus.SKIPPED: "Не беру"}
+ACTION_RU = {
+    DealStatus.TAKEN: "В работу",
+    DealStatus.SUBMITTED: "КП отправлено",
+    DealStatus.SKIPPED: "Не беру",
+}
 
 
 class View(StrEnum):
@@ -60,33 +72,6 @@ VIEW_RU = {
     View.EXCLUDED: "Отсеянные",
     View.ARCHIVE: "Архив",
 }
-
-
-class Verdict(StrEnum):
-    TAKE = "take"
-    DECIDE = "decide"
-    SKIP = "skip"
-    WAIT = "wait"
-
-
-VERDICT_RU = {
-    Verdict.TAKE: "Стоит взять",
-    Verdict.DECIDE: "Нужно ваше решение",
-    Verdict.SKIP: "Не берём",
-    Verdict.WAIT: "Ещё разбираем",
-}
-
-
-def verdict(deal: Deal) -> Verdict:
-    if deal.status is DealStatus.FILTERED_OUT:
-        return Verdict.SKIP
-    if deal.conditions_met is None:
-        return Verdict.WAIT
-    if not catalog_met(deal.score_breakdown) and deal.conditions_met >= CONDITIONS_TOTAL - 2:
-        return Verdict.DECIDE  # позиции нет в каталоге — решает менеджер: искать у дистрибьютора или не идти
-    if deal.status is DealStatus.HOT or deal.conditions_met == CONDITIONS_TOTAL:
-        return Verdict.TAKE
-    return Verdict.DECIDE if deal.conditions_met >= CONDITIONS_TOTAL - 1 else Verdict.SKIP
 
 
 def time_left(end_at: datetime | None, now: datetime) -> str:
@@ -107,10 +92,6 @@ def time_left(end_at: datetime | None, now: datetime) -> str:
 
 def urgent(end_at: datetime | None, now: datetime) -> bool:
     return end_at is not None and now < end_at <= now + timedelta(hours=24)
-
-
-def msk(moment: datetime | None) -> str:
-    return "не указано" if moment is None else moment.astimezone(MSK).strftime("%d.%m %H:%M")
 
 
 def view_filter(view: View, now: datetime) -> ColumnElement[bool]:
@@ -156,6 +137,9 @@ class DealRow:
     url: str
     found_msk: str
     published_msk: str
+    stamp: Stamp
+    stamp_ru: str
+    stamp_sub: str
 
 
 def _subject(deal: Deal) -> str:
@@ -179,35 +163,55 @@ def deal_rows(session: Session, view: View, now: datetime, period: Period | None
     platforms = dict(session.execute(select(Platform.id, Platform.name)).tuples().all())
     ids = [d.id for d in deals]
     with_kp = set(session.scalars(select(Proposal.deal_id).where(Proposal.deal_id.in_(ids))))
-    rows = []
-    for d in deals:
-        v = verdict(d)
-        rows.append(
-            DealRow(
-                id=d.id,
-                title=d.title,
-                subject=_subject(d),
-                customer=d.customer_name or "заказчик не указан",
-                platform=platforms.get(d.platform_id, "площадка"),
-                procedure=PROCEDURE_RU[d.procedure],
-                amount=short_rub(d.nmck),
-                n=d.conditions_met,
-                catalog=catalog_met(d.score_breakdown),
-                verdict=v,
-                verdict_ru=VERDICT_RU[v],
-                end_msk=msk(d.end_at),
-                left=time_left(d.end_at, now),
-                urgent=urgent(d.end_at, now),
-                status=d.status,
-                status_ru=STATUS_RU[d.status],
-                has_kp=d.id in with_kp,
-                reason=d.filter_reason,
-                url=d.url,
-                found_msk=msk(d.created_at),
-                published_msk=msk(d.start_at),
-            )
+    decided = decided_at(session, ids)
+    return [
+        make_row(
+            d, platforms.get(d.platform_id, "площадка"), _subject(d), d.id in with_kp, decided.get(d.id), now
         )
-    return rows
+        for d in deals
+    ]
+
+
+def plural(n: int, forms: tuple[str, str, str]) -> str:
+    """1 запись, 2 записи, 5 записей."""
+    if n % 10 == 1 and n % 100 != 11:
+        return forms[0]
+    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
+        return forms[1]
+    return forms[2]
+
+
+def make_row(
+    d: Deal, platform: str, subject: str, has_kp: bool, decided: datetime | None, now: datetime
+) -> DealRow:
+    v = verdict(d)
+    st, sub = stamp(d, v, has_kp, decided, now)
+    return DealRow(
+        id=d.id,
+        title=d.title,
+        subject=subject,
+        customer=d.customer_name or "заказчик не указан",
+        platform=platform,
+        procedure=PROCEDURE_RU[d.procedure],
+        amount=short_rub(d.nmck),
+        n=d.conditions_met,
+        catalog=catalog_met(d.score_breakdown),
+        verdict=v,
+        verdict_ru=VERDICT_RU[v],
+        end_msk=msk(d.end_at),
+        left=time_left(d.end_at, now),
+        urgent=urgent(d.end_at, now),
+        status=d.status,
+        status_ru=STATUS_RU[d.status],
+        has_kp=has_kp,
+        reason=d.filter_reason,
+        url=d.url,
+        found_msk=msk(d.created_at),
+        published_msk=msk(d.start_at),
+        stamp=st,
+        stamp_ru=STAMP_RU[st],
+        stamp_sub=sub,
+    )
 
 
 def view_counts(session: Session, now: datetime, period: Period | None = None) -> dict[View, int]:
@@ -273,6 +277,7 @@ class DealCard:
     positions: list[PositionView]
     not_license_reason: str | None
     kp_files: list[FileView]
+    kp_by_manager: bool
     kp_blockers: list[str]
     docs: list[FileView]
     steps: list[StepView]
@@ -281,7 +286,13 @@ class DealCard:
     priority: list[tuple[str, float, float]]
     score: float | None
     rules_version: str | None
-    history: list[tuple[str, str, str | None]] = field(default_factory=list)
+    history: list[LogLine] = field(default_factory=list)
+    history_ru: str = ""
+    steps_ru: str = ""
+    track: list[TrackStep] = field(default_factory=list)
+    actions: list[Action] = field(default_factory=list)
+    can_skip: bool = False
+    skip_reason: str = ""
 
 
 def _analysis(deal: Deal) -> Analysis | None:
@@ -314,14 +325,140 @@ COMPONENT_RU = {
 }
 
 
+@dataclass(frozen=True)
+class TrackStep:
+    """Шаг дорожки «Ход сделки»: done — пройден, now — сейчас, next — впереди, stop — сделка остановилась."""
+
+    name: str
+    when: str
+    state: str
+
+
+TRACK = ("Найдена", "Разобрана", "В работе", "КП отправлено")
+STEP_OF = {
+    DealStatus.NEW: 0,
+    DealStatus.FILTERED_OUT: 1,
+    DealStatus.ANALYZED: 1,
+    DealStatus.HOT: 1,
+    DealStatus.EXPIRED: 1,
+    DealStatus.TAKEN: 2,
+    DealStatus.SUBMITTED: 3,
+}
+
+
+def track(deal: Deal, log: list[DealStatusLog], now: datetime) -> list[TrackStep]:
+    """Дорожка сделки по журналу статусов. Остановка (отсеяна, отказ, срок) заменяет оставшиеся шаги."""
+    when = ["" for _ in TRACK]
+    when[0] = msk(deal.created_at)
+    for e in sorted(log, key=lambda e: e.id or 0):  # последняя запись о шаге — его дата
+        i = STEP_OF.get(e.to_status)
+        if i:
+            when[i] = msk(e.at)
+    closed = deal.end_at is not None and deal.end_at <= now
+    st = deal.status
+    stop: str | None = None
+    if st is DealStatus.SKIPPED:
+        before = next(
+            (e.from_status for e in sorted(log, key=lambda e: -(e.id or 0)) if e.to_status is st), None
+        )
+        reached = STEP_OF.get(before, 1) if before is not None else 1
+        stop = "Отказ"
+    else:
+        reached = STEP_OF[st]
+        if st is DealStatus.FILTERED_OUT:
+            reached, stop = 0, "Отсеяна"
+        elif st is DealStatus.TAKEN and closed:
+            stop = "Срок вышел"
+        elif st is DealStatus.EXPIRED or (closed and st is not DealStatus.SUBMITTED):
+            stop = "Приём закрыт"
+    steps = [
+        TrackStep(TRACK[i], when[i], "done" if i < reached or (i == reached and stop) else "now")
+        for i in range(reached + 1)
+    ]
+    if stop:
+        end = deal.end_at if stop in ("Приём закрыт", "Срок вышел") else None
+        stop_log = next((e for e in sorted(log, key=lambda e: -(e.id or 0)) if e.to_status is st), None)
+        stamp_when = msk(end) if end else (msk(stop_log.at) if stop_log else "")
+        return [*steps, TrackStep(stop, stamp_when, "stop")]
+    if st is DealStatus.SUBMITTED:
+        return [*steps[:-1], TrackStep(TRACK[3], when[3], "done")]
+    return steps + [TrackStep(TRACK[i], "", "next") for i in range(reached + 1, len(TRACK))]
+
+
+@dataclass(frozen=True)
+class Action:
+    """Кнопка смены статуса в карточке: какой статус ставит, как называется и что произойдёт."""
+
+    to: DealStatus
+    label: str
+    hint: str
+    primary: bool = False
+
+
+def next_actions(deal: Deal, has_kp: bool, now: datetime) -> list[Action]:
+    """Что менеджер может сделать со сделкой сейчас. «Не беру» с причиной выводится отдельно (can_skip)."""
+    closed = deal.end_at is not None and deal.end_at <= now
+    analyzed = deal.conditions_met is not None
+    match deal.status:
+        case DealStatus.ANALYZED | DealStatus.HOT if not closed:
+            return [
+                Action(
+                    DealStatus.TAKEN,
+                    "Беру в работу",
+                    "Робот соберёт КП по разбору: аналоги, позиции вне каталога и пустые цены тоже. "
+                    "Напоминания о сделке прекратятся.",
+                    primary=True,
+                )
+            ]
+        case DealStatus.TAKEN:
+            return [
+                Action(
+                    DealStatus.SUBMITTED,
+                    "КП отправлено",
+                    "Нажмите, когда отправите КП заказчику на площадке. На штампе будет «Отправлено» и дата."
+                    if has_kp
+                    else "КП ещё нет в карточке: дождитесь робота или приложите своё в блоке «КП».",
+                    primary=True,
+                )
+            ]
+        case DealStatus.SUBMITTED:
+            return [
+                Action(
+                    DealStatus.TAKEN, "Вернуть в работу", "Если отметили по ошибке. КП в карточке остаётся."
+                )
+            ]
+        case DealStatus.SKIPPED if analyzed and not closed:
+            return [
+                Action(DealStatus.TAKEN, "Вернуть в работу", "Передумали — робот соберёт КП, как при «Беру».")
+            ]
+    return []
+
+
+def can_skip(deal: Deal, now: datetime) -> bool:
+    closed = deal.end_at is not None and deal.end_at <= now
+    if deal.status is DealStatus.TAKEN:
+        return True  # и после срока: сделку в работе закрывают отказом
+    return not closed and deal.status in (
+        DealStatus.NEW,
+        DealStatus.ANALYZED,
+        DealStatus.HOT,
+        DealStatus.SKIPPED,
+    )
+
+
+def condition_text(c: dict[str, Any]) -> str:
+    """Строка под плиткой условия. НМЦ и срок уже в шапке карточки — у выполненных пишем порог, а не число."""
+    if c.get("met") and c.get("key") in ("amount", "time"):
+        return str(c.get("title", ""))
+    return str(c.get("reason", ""))
+
+
 def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
     platform = session.get(Platform, deal.platform_id)
     analysis = _analysis(deal)
     score: dict[str, Any] = deal.score_breakdown.get("score") or {}
     expl: dict[str, Any] = deal.score_breakdown.get("explanation") or {}
     agent: dict[str, Any] = deal.score_breakdown.get("analysis") or {}
-    v = verdict(deal)
-
     items: dict[int, CatalogItem] = {}
     if analysis is not None:
         ids = [p.catalog_item_id for p in analysis.positions if p.catalog_item_id is not None]
@@ -388,16 +525,18 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
     ]
     agent_cost = sum((s.cost_rub for s in raw_steps), Decimal(0))
 
-    history = [
-        (fb.created_at.astimezone(MSK).strftime("%d.%m %H:%M"), STATUS_RU[fb.action], fb.reason)
-        for fb in session.scalars(
-            select(Feedback).where(Feedback.deal_id == deal.id).order_by(Feedback.id.desc())
+    raw_log = list(
+        session.scalars(
+            select(DealStatusLog).where(DealStatusLog.deal_id == deal.id).order_by(DealStatusLog.id.desc())
         )
-    ]
+    )
+    history = [log_line(e) for e in raw_log]
+    shown = {str(c.get("reason")) for c in score.get("conditions") or []}  # уже под плитками условий
     findings = list(
         dict.fromkeys(
             f.text
             for f in session.scalars(select(Finding).where(Finding.deal_id == deal.id).order_by(Finding.id))
+            if f.text not in shown
         )
     )
     weights = score.get("weights") or {}
@@ -405,28 +544,13 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
     pay = PAYMENT_RU[deal.payment_terms] + (f" {deal.payment_days} дн." if deal.payment_days else "")
 
     return DealCard(
-        row=DealRow(
-            id=deal.id,
-            title=deal.title,
-            subject=analysis.subject if analysis else deal.title,
-            customer=deal.customer_name or "заказчик не указан",
-            platform=platform.name if platform else "площадка",
-            procedure=PROCEDURE_RU[deal.procedure],
-            amount=short_rub(deal.nmck),
-            n=deal.conditions_met,
-            catalog=catalog_met(deal.score_breakdown),
-            verdict=v,
-            verdict_ru=VERDICT_RU[v],
-            end_msk=msk(deal.end_at),
-            left=time_left(deal.end_at, now),
-            urgent=urgent(deal.end_at, now),
-            status=deal.status,
-            status_ru=STATUS_RU[deal.status],
-            has_kp=bool(kp_files),
-            reason=deal.filter_reason,
-            url=deal.url,
-            found_msk=msk(deal.created_at),
-            published_msk=msk(deal.start_at),
+        row=make_row(
+            deal,
+            platform.name if platform else "площадка",
+            analysis.subject if analysis else deal.title,
+            bool(kp_files),
+            decided_at(session, [deal.id]).get(deal.id),
+            now,
         ),
         url=deal.url,
         nmck=rub(deal.nmck),
@@ -436,7 +560,10 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
         has_tz=TRI_RU[deal.has_tz],
         smb_only=TRI_RU[deal.smb_only],
         min_kp_days=deal.kp_min_valid_days,
-        conditions=list(score.get("conditions") or []),
+        conditions=[
+            {**c, "short": SHORT.get(str(c.get("key")), str(c.get("title", ""))), "text": condition_text(c)}
+            for c in score.get("conditions") or []
+        ],
         why=list(expl.get("why") or []),
         check=expl.get("check"),
         why_stale=bool(expl.get("stale")),
@@ -447,6 +574,7 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
         if analysis and not analysis.is_license_supply
         else None,
         kp_files=kp_files,
+        kp_by_manager=bool(proposal and (proposal.items or {}).get("source") == "manager"),
         kp_blockers=list(deal.score_breakdown.get("kp_blockers") or []),
         docs=docs,
         steps=steps,
@@ -459,6 +587,19 @@ def deal_card(session: Session, deal: Deal, now: datetime) -> DealCard:
         score=score.get("score"),
         rules_version=deal.rules_version,
         history=history,
+        steps_ru=f"{len(steps)} {plural(len(steps), ('шаг', 'шага', 'шагов'))}",
+        history_ru=f"{len(history)} {plural(len(history), ('запись', 'записи', 'записей'))}",
+        track=track(deal, raw_log, now),
+        actions=next_actions(deal, bool(kp_files), now),
+        can_skip=can_skip(deal, now),
+        skip_reason=next(
+            (
+                e.reason or ""
+                for e in raw_log
+                if e.to_status is DealStatus.SKIPPED and e.actor is Actor.MANAGER
+            ),
+            "",
+        ),
     )
 
 

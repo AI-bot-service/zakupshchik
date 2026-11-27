@@ -23,6 +23,7 @@ from app.core.provenance import BUILD_MARK
 from app.kp.draft import KpDraft
 
 LOGO = Path(__file__).parent / "assets" / "logo.jpg"
+SLOGAN = Path(__file__).parent / "assets" / "slogan.png"  # картинка из шаблона, шрифт рукописный
 FONT = "Calibri"
 BLANK_FILL = "FFF2CC"
 GRAY = RGBColor(0x59, 0x59, 0x59)
@@ -33,7 +34,6 @@ ADDRESS = (
     "www.softline.ru | www.softline.com"
 )
 INTRO = "ПАО «Софтлайн» предлагает Вашему вниманию коммерческое предложение на следующих условиях:"
-SLOGAN = "We know we can\nDigital Transformation and Cybersecurity Solution Service Provider"
 HEAD = ("Артикул", "Наименование", "Кол-во", "Цена, руб.", "Сумма, руб.", "В т.ч. НДС, руб.")
 WIDTHS = (Cm(2.8), Cm(7.4), Cm(1.4), Cm(2.1), Cm(2.2), Cm(2.1))
 
@@ -191,7 +191,7 @@ def render_docx(draft: KpDraft, path: Path) -> Path:
 
     footer = section.footer.paragraphs[0]
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _text(footer, SLOGAN, 9, color=GRAY)
+    footer.add_run().add_picture(str(SLOGAN), width=Cm(13.3))
 
     props = doc.core_properties
     props.title = f"Коммерческое предложение — {draft.customer}"[:250]
