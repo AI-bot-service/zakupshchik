@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import secrets
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -137,12 +138,25 @@ def decide(deal_id: int, body: Decision, session: Db, manager: Mgr) -> dict[str,
     return {"status": deal.status.value}
 
 
+def _page_ctx(request: Request, session: Session, user: str, key: str | None) -> dict[str, Any]:
+    build, files = package(request.app.state.settings.public_url)
+    version = json.loads(files["manifest.json"])["version"]
+    return {
+        "user": user,
+        "csrf": csrf_token(request),
+        "key": key,
+        "notify_min": _notify_min(session),
+        "version": version,
+        "build": build,
+    }
+
+
 @pages.get("/extension", response_class=HTMLResponse)
 def extension_page(request: Request, user: User, session: Db) -> HTMLResponse:
     return request.app.state.templates.TemplateResponse(  # type: ignore[no-any-return]
         request,
         "extension.html",
-        {"user": user, "csrf": csrf_token(request), "key": None, "notify_min": _notify_min(session)},
+        _page_ctx(request, session, user, None),
     )
 
 
@@ -155,7 +169,7 @@ def extension_key(
     response: HTMLResponse = request.app.state.templates.TemplateResponse(
         request,
         "extension.html",
-        {"user": user, "csrf": csrf_token(request), "key": key, "notify_min": _notify_min(session)},
+        _page_ctx(request, session, user, key),
     )
     response.headers["Cache-Control"] = "no-store"
     return response

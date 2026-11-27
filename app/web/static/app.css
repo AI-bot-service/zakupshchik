@@ -156,6 +156,7 @@ main { padding: var(--sp-6) var(--sp-5); max-width: 1120px; margin: 0 auto; }
 /* Сделки: список */
 .page-head { display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: end; justify-content: space-between; margin-bottom: var(--sp-5); }
 .page-head p { margin-top: var(--sp-2); }
+.h1-version { font-size: var(--fs-base); font-weight: 600; letter-spacing: 0; color: var(--c-ink-muted); white-space: nowrap; }
 .export { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; font-size: var(--fs-sm); font-weight: 600; }
 .export input {
   min-height: 36px; padding: 0 var(--sp-2); border: 1px solid var(--c-rule); border-radius: var(--radius);
