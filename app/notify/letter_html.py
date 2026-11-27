@@ -12,6 +12,7 @@ from typing import Any
 from app.notify.letters import DealLetter, rub
 from app.pipeline.prefilter import PROCEDURE_RU
 from app.report.excel import CONTRACT_RU, MSK, PAYMENT_RU
+from app.scoring.rules import Rules
 from app.scoring.score import CONDITIONS_TOTAL, catalog_met
 
 PAPER, SHEET, INK, MUTED, RULE = "#eef1f5", "#ffffff", "#18212e", "#5a6576", "#d5dbe3"
@@ -20,13 +21,28 @@ OK, OK_SOFT, DOWN, DOWN_SOFT, PRICE_EMPTY = "#1e7a4c", "#e3f3ea", "#b42318", "#f
 FONT = "Manrope,'Segoe UI',Roboto,Arial,sans-serif"
 
 SHORT = {
-    "catalog": "Есть в каталоге",
-    "amount": "До 1 млн ₽",
+    "catalog": "Каталог",
+    "amount": "Сумма",
     "simple": "Простая",
     "payment": "Оплата",
-    "time": "Успеваем",
-    "fits": "В рамках НМЦ",
+    "time": "Срок",
+    "fits": "Цена",
 }
+
+
+def _meaning(rules: Rules | None) -> dict[str, str]:
+    """Что означает каждое условие — с порогами из действующих правил."""
+    nmck = f"{rules.profile.filters.max_nmck_rub:,.0f}".replace(",", " ") if rules else "1 000 000"
+    days = f"{rules.profile.conditions.max_postpay_days}" if rules else "10"
+    hours = f"{rules.profile.conditions.min_hours_for_kp:g}" if rules else "24"
+    return {
+        "catalog": "все позиции закупки нашлись в каталоге Софтлайна",
+        "amount": f"НМЦ не больше {nmck} ₽",
+        "simple": "без конкурса, обеспечения, требований к участнику и «только МСП»",
+        "payment": f"предоплата или отсрочка не больше {days} дн.",
+        "time": f"до конца приёма КП не меньше {hours} ч",
+        "fits": "сумма по ценам каталога не больше НМЦ",
+    }
 
 
 def _e(value: object) -> str:
@@ -35,26 +51,39 @@ def _e(value: object) -> str:
 
 def _section(title: str, body: str) -> str:
     return (
-        f'<tr><td style="padding:24px 32px 0">'
+        f'<tr><td style="padding:24px 24px 0">'
         f'<div style="font:700 15px/1.3 {FONT};color:{INK};padding-bottom:8px;'
         f'border-bottom:1px solid {RULE}">{_e(title)}</div>{body}</td></tr>'
     )
 
 
-def _bar(conditions: list[dict[str, Any]]) -> str:
-    cells = []
+def _bar(conditions: list[dict[str, Any]], rules: Rules | None) -> str:
+    cells, legend = [], []
+    meaning = _meaning(rules)
+    width = f"{100 / max(len(conditions), 1):.2f}%"
     for c in conditions:
+        key = str(c.get("key"))
         met = bool(c.get("met"))
         fg, bg = (OK, OK_SOFT) if met else (DOWN, DOWN_SOFT)
-        label = SHORT.get(str(c.get("key")), str(c.get("title", "")))
+        label = SHORT.get(key, str(c.get("title", "")))
         cells.append(
-            f'<td width="20%" style="background:{bg};color:{fg};padding:8px 4px;text-align:center;'
-            f'font:700 12px/1.25 {FONT};border:2px solid {SHEET}">'
+            f'<td width="{width}" style="background:{bg};color:{fg};padding:8px 2px;text-align:center;'
+            f'font:700 12px/1.25 {FONT};border:2px solid {SHEET};white-space:nowrap">'
             f'<span style="font-size:15px">{"✔" if met else "✘"}</span><br>{_e(label)}</td>'
         )
+        legend.append(
+            f'<tr><td width="72" style="padding:2px 8px 2px 0;font:700 12px/1.4 {FONT};color:{fg};'
+            f'vertical-align:top">{"✔" if met else "✘"} {_e(label)}</td>'
+            f'<td style="padding:2px 0;font:400 12px/1.4 {FONT};color:{MUTED}">'
+            f"{_e(meaning.get(key, ''))}</td></tr>"
+        )
     return (
+        f'<div style="font:400 12px/1.4 {FONT};color:{MUTED};padding-top:16px">'
+        "Условия отбора: зелёным — выполнено, красным — нет</div>"
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="border-collapse:collapse;margin-top:16px"><tr>{"".join(cells)}</tr></table>'
+        f'style="border-collapse:collapse;table-layout:fixed;margin-top:4px"><tr>{"".join(cells)}</tr></table>'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'style="border-collapse:collapse;margin-top:8px">{"".join(legend)}</table>'
     )
 
 
@@ -133,7 +162,7 @@ def _positions(letter: DealLetter) -> str:
     )
 
 
-def deal_html(letter: DealLetter, now: datetime) -> str:
+def deal_html(letter: DealLetter, now: datetime, rules: Rules | None = None) -> str:
     d, a = letter.deal, letter.analysis
     score: dict[str, Any] = d.score_breakdown.get("score") or {}
     expl: dict[str, Any] = d.score_breakdown.get("explanation") or {}
@@ -155,17 +184,17 @@ def deal_html(letter: DealLetter, now: datetime) -> str:
 
     parts: list[str] = [
         # Шапка: вывод, что покупают, полоса условий
-        f'<tr><td style="padding:28px 32px 0">'
+        f'<tr><td style="padding:24px 24px 0">'
         f'<div style="font:400 13px/1.3 {FONT};color:{MUTED}">Робот «Закупщик» нашёл сделку на площадке '
         f"{_e(letter.platform)}</div>"
         f'<div style="font:800 26px/1.15 {FONT};color:{verdict_color};padding-top:12px">{verdict}'
         f'<span style="color:{INK};font-weight:700"> — {d.conditions_met} из 6</span></div>'
         f'<div style="font:600 17px/1.4 {FONT};color:{INK};padding-top:8px">{_e(a.subject)}</div>'
-        f"{_bar(conditions)}</td></tr>"
+        f"{_bar(conditions, rules)}</td></tr>"
     ]
     if not in_catalog:
         parts.append(
-            f'<tr><td style="padding:16px 32px 0"><div style="background:{DOWN_SOFT};'
+            f'<tr><td style="padding:16px 24px 0"><div style="background:{DOWN_SOFT};'
             f"border-left:4px solid {DOWN};"
             f'padding:12px 16px;font:400 14px/1.45 {FONT};color:{INK}">'
             "<b>Позиции нет в каталоге Софтлайна.</b> "
@@ -197,7 +226,7 @@ def deal_html(letter: DealLetter, now: datetime) -> str:
         parts.append(_section("Пояснение робота", _list([str(w) for w in expl["why"]], STAMP)))
     if expl.get("check"):
         parts.append(
-            f'<tr><td style="padding:16px 32px 0"><div style="background:{STAMP_SOFT};padding:12px 16px;'
+            f'<tr><td style="padding:16px 24px 0"><div style="background:{STAMP_SOFT};padding:12px 16px;'
             f'font:400 14px/1.45 {FONT};color:{INK}"><b>Проверьте:</b> {_e(expl["check"])}</div></td></tr>'
         )
 
@@ -216,7 +245,7 @@ def deal_html(letter: DealLetter, now: datetime) -> str:
     parts.append(_section("Во вложении", _list(files, MUTED)))
 
     parts.append(
-        f'<tr><td style="padding:28px 32px 32px">'
+        f'<tr><td style="padding:24px 24px 24px">'
         f'<a href="{_e(letter.card_url)}" style="display:inline-block;background:{STAMP};color:{SHEET};'
         f'font:700 15px/1 {FONT};text-decoration:none;padding:14px 22px;border-radius:6px">'
         "Открыть карточку</a>"
@@ -231,7 +260,7 @@ def deal_html(letter: DealLetter, now: datetime) -> str:
         '<meta name="viewport" content="width=device-width,initial-scale=1"></head>'
         f'<body style="margin:0;padding:0;background:{PAPER}">'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="background:{PAPER}"><tr><td align="center" style="padding:24px 12px">'
+        f'style="background:{PAPER}"><tr><td align="center" style="padding:8px 4px">'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'style="max-width:640px;background:{SHEET};border:1px solid {RULE};border-radius:6px">'
         f"{''.join(parts)}</table></td></tr></table></body></html>"

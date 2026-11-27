@@ -200,7 +200,7 @@ def notify_deals(
             card_url=f"{public_url}/deals/{deal.id}",
         )
         subject, text = deal_subject(deal, analysis, now), deal_text(letter, now)
-        html = deal_html(letter, now)
+        html = deal_html(letter, now, rules)
         excel, _ = build_report(session, rules, now, Period(None, None, False, f"сделка №{deal.id}", deal.id))
         sheet = Attachment(f"zakupshchik-{deal.external_id}.xlsx", excel, _MIME[".xlsx"])
         for row in todo:

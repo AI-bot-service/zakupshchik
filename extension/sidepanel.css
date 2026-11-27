@@ -92,3 +92,5 @@ details summary { cursor: pointer; font-weight: 600; color: var(--c-stamp); }
 .links { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+.hint { margin: calc(-1 * var(--sp-1)) 0 var(--sp-1); font-size: var(--fs-sm); line-height: var(--lh-base); color: var(--c-ink-muted); }

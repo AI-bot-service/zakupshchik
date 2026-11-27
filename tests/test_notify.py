@@ -97,7 +97,12 @@ def test_deal_html_escapes_platform_text_and_has_text_fallback() -> None:
     )
     html = deal_html(letter, NOW)
     assert "<script>" not in html and "&lt;script&gt;" in html and "&lt;b&gt;жирно" in html
-    assert "Стоит взять" in html and "Есть в каталоге" in html and "KL4863RAQFS" in html
+    assert (
+        "Стоит взять" in html
+        and "Условия отбора" in html
+        and "нашлись в каталоге" in html
+        and "KL4863RAQFS" in html
+    )
     assert 'href="https://stand.example/deals/1"' in html
 
     msg = message_from_bytes(build_mime("a@x.ru", "b@x.ru", "Тема", "текст", [], html), policy=policy.default)

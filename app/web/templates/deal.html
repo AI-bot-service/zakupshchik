@@ -149,10 +149,13 @@
       <form method="post" action="/deals/{{ r.id }}/status" class="decide">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <button class="btn btn-primary" name="action" value="taken" type="submit">Беру в работу</button>
+        <p class="hint">Вы готовите КП. Плагин перестаёт напоминать о сделке, в отчёте статус «беру».</p>
         <button class="btn btn-quiet" name="action" value="submitted" type="submit">КП подано</button>
+        <p class="hint">КП отправлено заказчику на площадке. Статус «подано» — по нему видно, сколько КП подано за период.</p>
       </form>
       <details class="skip">
         <summary>Не беру</summary>
+        <p class="hint">Сделка не подходит. Причина сохраняется в истории — по причинам уточняют правила отбора в «Админке».</p>
         <form method="post" action="/deals/{{ r.id }}/status">
           <input type="hidden" name="csrf" value="{{ csrf }}">
           <input type="hidden" name="action" value="skipped">
