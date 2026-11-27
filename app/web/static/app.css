@@ -278,6 +278,7 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
 .journal th, .journal td { padding: var(--sp-2); border-bottom: 1px solid var(--c-rule); text-align: left; vertical-align: top; font-size: var(--fs-sm); font-weight: 400; }
 .journal th { font-weight: 700; }
 .journal tr.is-error td { color: var(--c-down); }
+.journal tr.is-quiet td { color: var(--c-ink-muted); padding-top: var(--sp-1); padding-bottom: var(--sp-1); }
 
 .decide { display: grid; gap: var(--sp-2); }
 .decide .btn-quiet { justify-self: stretch; min-height: 44px; }
@@ -309,8 +310,8 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
 @media (max-width: 640px) {
   .card-head .stamp { transform: rotate(-2deg); margin-left: var(--sp-1); animation: none; }
   .card-head .stamp-main { font-size: var(--fs-lg); }
-  .topbar { gap: var(--sp-2); }
-  .topbar nav { gap: var(--sp-2); }
+  .topbar { gap: var(--sp-2); flex-wrap: wrap; }
+  .topbar nav { gap: var(--sp-2) var(--sp-3); flex-wrap: wrap; margin-left: 0; }
 }
 .ext-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--sp-6); align-items: start; }
 .ext-grid .side-block form { margin: 0; }

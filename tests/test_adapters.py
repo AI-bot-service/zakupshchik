@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
+import httpx
 import pytest
 
 from app.adapters import parse
@@ -125,6 +126,32 @@ def test_fetcher_waits_between_requests_to_one_platform() -> None:
         now[0] += 1
         f._wait_turn(cfg)
     assert slept == [pytest.approx(cfg.min_interval_s - 1)]
+
+
+def _flaky_fetcher(codes: list[int], monkeypatch: pytest.MonkeyPatch) -> tuple[Fetcher, list[int]]:
+    seen: list[int] = []
+
+    def reply(_: httpx.Request) -> httpx.Response:
+        seen.append(codes[len(seen)])
+        return httpx.Response(seen[-1], text="{}")
+
+    monkeypatch.setattr(Fetcher._get.retry, "sleep", lambda _: None)
+    f = Fetcher(None, sleep=lambda _: None)
+    f._client = httpx.Client(transport=httpx.MockTransport(reply))
+    return f, seen
+
+
+def test_flaky_status_is_retried_only_where_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    portal = CONFIGS["mos_portal"]
+    assert 400 in portal.retry_status
+    f, seen = _flaky_fetcher([400, 200], monkeypatch)
+    assert f.get_url(portal, portal.url) == "{}"
+    assert seen == [400, 200]
+
+    f, seen = _flaky_fetcher([400, 200], monkeypatch)
+    with pytest.raises(httpx.HTTPStatusError):
+        f.get_url(CONFIGS["tektorg_market"], CONFIGS["tektorg_market"].url)
+    assert seen == [400]
 
 
 def test_platform_codes_unique_and_https() -> None:

@@ -37,8 +37,12 @@ def build_params(cfg: PlatformConfig, query: str) -> dict[str, str | list[str]]:
     return params
 
 
+class FlakyStatusError(httpx.HTTPStatusError):
+    """Код ответа, который у этой площадки бывает разовым (retry_status в platforms.yaml): повторяем."""
+
+
 def _retryable(exc: BaseException) -> bool:
-    if isinstance(exc, httpx.TransportError):
+    if isinstance(exc, httpx.TransportError | FlakyStatusError):
         return True
     return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (429, 500, 502, 503, 504)
 
@@ -119,5 +123,7 @@ class Fetcher:
             raise ValueError("площадки опрашиваем только по https")
         self._wait_turn(cfg)
         resp = self._client.get(url, params=params)
+        if resp.status_code in cfg.retry_status:
+            raise FlakyStatusError(f"HTTP {resp.status_code}", request=resp.request, response=resp)
         resp.raise_for_status()
         return resp

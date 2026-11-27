@@ -12,6 +12,8 @@ platforms:
     kind: json
     url: https://old.zakupki.mos.ru/api/Cssp/Purchase/Query
     min_interval_s: 3
+    # 27.11: на исправный запрос изредка 400 (5–6 раз за 150 циклов), следующий цикл тот же запрос проходит
+    retry_status: [400]
     queries: ["программного обеспечения", "лицензи", "неисключительных прав", "антивирус"]
     json_params:
       queryDto:

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Журнал · Закупщик{% endblock %}
+{% block head %}{% if active %}<meta http-equiv="refresh" content="10;url=/journal">{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Журнал робота</h1>
+    <p class="muted">Каждые 5 минут робот обходит площадки, отсеивает лишнее и разбирает подходящие закупки. Здесь — последние прогоны: что нашёл, что отсеял, сколько стоил разбор.</p>
+  </div>
+  <form method="post" action="/journal/run">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-primary" type="submit" {{ 'disabled' if active }}>{{ 'Цикл идёт…' if active else 'Запустить цикл' }}</button>
+  </form>
+</div>
+
+{% if active %}
+<p class="saved" role="status">Внеочередной цикл {{ state_ru[active.output.state] }}: сбор с площадок, затем разбор новых закупок. Страница обновляется сама каждые 10 секунд.</p>
+{% elif started == 'already' %}
+<p class="saved" role="status">Цикл уже запущен, второй не нужен.</p>
+{% endif %}
+
+{% if runs %}
+<div class="table-wrap">
+  <table class="journal runs">
+    <thead><tr><th>Начало</th><th>Прогон</th><th>Итог</th><th>Модель, ₽</th><th>Время</th></tr></thead>
+    <tbody>
+      {% for r in runs %}
+      <tr class="{{ 'is-error' if r.errors }}{{ ' is-quiet' if r.quiet }}">
+        <td>{{ r.at | msk }}</td>
+        {% if r.kind == 'manual' %}
+        <td><b>Запуск вручную</b><br><span class="muted">{{ r.by }} · {{ state_ru[r.state] }}</span></td>
+        <td>
+          {% set c = r.summary.get('collect', {}) %}{% set a = r.summary.get('analyze', {}) %}
+          {% if c %}найдено {{ c.found or 0 }}, новых {{ c.new or 0 }}, прошли отбор {{ c.passed or 0 }}{% endif %}
+          {% if a %}<br>разобрано {{ a.analyzed or 0 }}, горячих {{ a.hot or 0 }}, КП {{ a.kp_made or 0 }}{% endif %}
+          {% if r.summary.error or c.error or a.error %}<br>сбой: {{ r.summary.error or c.error or a.error }}{% endif %}
+        </td>
+        <td>{{ a.cost_rub if a and a.cost_rub else '' }}</td>
+        {% elif r.quiet %}
+        <td>Сбор с площадок</td>
+        <td>нового нет · {% for p in r.platforms %}{{ names.get(p.code, p.code) }} {{ p.found }}{{ ', ' if not loop.last }}{% endfor %}</td>
+        <td></td>
+        {% elif r.kind == 'collect' %}
+        <td>Сбор с площадок</td>
+        <td>
+          {% for p in r.platforms %}{{ names.get(p.code, p.code) }}: {{ p.found }}{% if p.new %}, новых {{ p.new }}{% endif %}{% if p.error %} — <span>ошибка: {{ p.error }}</span>{% endif %}<br>{% endfor %}
+          <span class="muted">прошли отбор {{ r.passed }}, отсеяно {{ r.filtered_out }}{% if r.details %}, карточек загружено {{ r.details }}{% endif %}</span>
+        </td>
+        <td></td>
+        {% else %}
+        <td>Разбор агентом</td>
+        <td>сделок {{ r.deals }}, вызовов модели {{ r.llm_calls }}{% if r.tokens %}, токенов {{ '{:,}'.format(r.tokens).replace(',', ' ') }}{% endif %}{% if r.errors %}<br>ошибок {{ r.errors }}{% endif %}</td>
+        <td>{{ '%.2f' | format(r.cost_rub) }}</td>
+        {% endif %}
+        <td>{{ (r.ms / 1000) | round(1) }} с</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<section class="sheet empty">
+  <h2>Прогонов ещё не было</h2>
+  <p>Нажмите «Запустить цикл» или подождите до 5 минут.</p>
+</section>
+{% endif %}
+{% endblock %}
