@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from docx import Document
 
-from app.agent.analyze import AgentContext, analyze_deal, card_text, verify
+from app.agent.analyze import AgentContext, analyze_deal, card_text, guarantee_error, verify
 from app.agent.explain import Explanation, check_numbers, explain, fallback
 from app.agent.journal import Journal
 from app.agent.llm import LLMReply, Message, ToolCall
@@ -255,6 +255,47 @@ def test_agent_limits_searches() -> None:
     llm = ScriptedLLM([reply(*[search] * 7), reply(("submit_analysis", final))])
     res = analyze_deal(ctx(llm, catalog), make_deal())
     assert len(catalog.queries) == 6 and res.searches == 6
+
+
+def test_agent_gets_all_files_upfront_not_by_choice() -> None:
+    deal = make_deal()
+    files = [{"id": "77", "name": "ТЗ.docx"}, {"id": "78", "name": "Контракт.docx"}]
+    deal.raw_masked["details"]["files"] = files
+
+    def two(d: Deal, file_id: str) -> AttachmentText:
+        if file_id == "78":
+            return AttachmentText(file_id, "Контракт.docx", "Оплата в течение 7 рабочих дней", False, False)
+        return attachments(d, file_id)
+
+    llm = ScriptedLLM(
+        [
+            reply(("get_attachment_text", {"file_id": "78"}), ("search_catalog", {"query": "Kaspersky"})),
+            reply(("submit_analysis", analysis_args())),
+        ]
+    )
+    c = AgentContext(FakeCatalog(), two, llm, "fake-main", Journal(None, "run", 1))
+    res = analyze_deal(c, deal)
+    first = llm.calls[0][1]["content"]
+    assert "<файлы_закупки>" in first and TZ in first and "Оплата в течение 7 рабочих дней" in first
+    assert res.files_read == ["ТЗ.docx", "Контракт.docx"]
+    assert any(m["role"] == "tool" and "уже приложен" in m["content"] for m in llm.calls[1])
+
+
+@pytest.mark.parametrize(
+    ("quote", "ok"),
+    [
+        ("Обеспечение исполнения контракта устанавливается в размере 5 % от цены контракта", True),
+        ("Размер обеспечения заявки — 1 % НМЦК", True),
+        ("участник предоставляет банковскую гарантию", True),
+        ("Обеспечение гарантийных обязательств установлено в размере 1 %", True),
+        ("гарантийные обязательства Поставщика действует в течение всего срока использования", False),
+        ("для обеспечения государственных и муниципальных нужд", False),
+        ("Обеспечение исполнения контракта не установлено", False),
+        ("Обеспечение гарантийных обязательств не устанавливается", False),
+    ],
+)
+def test_guarantee_quote_must_be_real_security(quote: str, ok: bool) -> None:
+    assert (guarantee_error(quote) is None) is ok
 
 
 # ── ограничения и «N из 5» ────────────────────────────────────────────────

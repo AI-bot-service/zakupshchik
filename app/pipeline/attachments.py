@@ -30,7 +30,7 @@ from app.db.models import Deal, DealFile
 
 FILES_DIR = Path(__file__).resolve().parents[2] / "data" / "files"
 MAX_FILE_BYTES = 15_000_000
-MAX_TEXT_CHARS = 30_000
+MAX_TEXT_CHARS = 60_000
 _MIME = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".doc": "application/msword",

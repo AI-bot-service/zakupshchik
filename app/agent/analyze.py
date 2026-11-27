@@ -23,7 +23,7 @@ from app.adapters.config import PlatformConfig
 from app.adapters.fetch import Fetcher
 from app.agent.journal import Journal
 from app.agent.llm import LLM, LLMReply, Message, ToolCall
-from app.agent.schemas import Analysis, analysis_parameters
+from app.agent.schemas import Analysis, ConstraintKind, analysis_parameters
 from app.catalog.search import CatalogHit, search_catalog
 from app.catalog.vendors import VendorIndex
 from app.db.models import CatalogItem, Deal, MatchKind
@@ -33,7 +33,10 @@ from app.pipeline.prefilter import PROCEDURE_RU
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 MAX_TURNS = 12
 MAX_SEARCHES = 6
-MAX_FILES = 2
+MAX_FILES = 5
+# Файлы закупки кладутся в разбор сразу, а не по выбору модели: иначе итог зависит от того, какие 2 из 3
+# она открыла (пропущен проект контракта — не видны оплата и обеспечение). Не влезло — модель откроет сама.
+PRELOAD_CHARS = 90_000
 MAX_SUBMIT_ERRORS = 2
 MAX_COST_RUB = Decimal("20")
 
@@ -159,6 +162,31 @@ def _norm(text: str) -> str:
     return _SPACE_BEFORE_PUNCT.sub(r"\1", flat)
 
 
+# «Обеспечение» по 44/223-ФЗ: деньги или банковская гарантия под заявку, исполнение контракта или гарантийные
+# обязательства. Модель путает его с гарантийным сроком поставщика и с оборотом «для обеспечения нужд».
+_GUARANTEE = re.compile(
+    r"обеспечени\w*\s+(?:\S+\s+){0,3}?(?:заяв|исполнени|гарантийн|контракт|договор)"
+    r"|размер\w*\s+обеспечени|банковск\w*\s+гаранти"
+)
+_GUARANTEE_ABSENT = re.compile(r"не\s+(?:установл|устанавлива|требу|предусм|предоставл)|отсутству")
+
+
+def guarantee_error(quote: str) -> str | None:
+    q = _norm(quote)
+    if not _GUARANTEE.search(q):
+        return (
+            f"ограничение guarantee: в цитате «{quote[:80]}» нет обеспечения заявки или исполнения "
+            "контракта. Гарантийный срок и гарантийные обязательства поставщика — не обеспечение: "
+            "kind=other или не указывай"
+        )
+    if _GUARANTEE_ABSENT.search(q):
+        return (
+            f"ограничение guarantee: цитата «{quote[:80]}» говорит, что обеспечения нет, — "
+            "не добавляй ограничение"
+        )
+    return None
+
+
 def verify(analysis: Analysis, corpus: str, seen_ids: set[int]) -> list[str]:
     """Проверки кодом до использования ответа. Пустой список — принято."""
     norm = _norm(corpus)
@@ -170,6 +198,9 @@ def verify(analysis: Analysis, corpus: str, seen_ids: set[int]) -> list[str]:
     for where, quote in quotes:
         if _norm(quote) not in norm:
             errors.append(f"{where}: цитаты «{quote[:80]}» нет в тексте закупки — дай дословный фрагмент")
+    for c in analysis.constraints:
+        if c.kind is ConstraintKind.GUARANTEE and (err := guarantee_error(c.quote)):
+            errors.append(err)
     for p in analysis.positions:
         if p.match is MatchKind.NONE and p.catalog_item_id is not None:
             errors.append(f"позиция «{p.name[:40]}»: при match=none catalog_item_id должен быть null")
@@ -254,6 +285,7 @@ class _Run:
         self.card = card_text(deal)
         self.corpus = [self.card]
         self.seen: set[int] = set()
+        self.opened: set[str] = set()
         self.submit_errors = 0
         self.result = AgentResult(None, None, prompt.version, input_hash(deal, prompt, ctx.model))
         self.handlers: dict[str, Callable[[dict[str, Any]], str]] = {
@@ -262,18 +294,51 @@ class _Run:
             "get_catalog_item": self._item,
         }
 
-    def _attachment(self, args: dict[str, Any]) -> str:
-        file_id = str(args.get("file_id", ""))
-        if len(self.result.files_read) >= MAX_FILES:
-            return "лимит: открыто уже 2 файла. Работай с тем, что есть."
-        try:
-            att = self.ctx.attachments(self.deal, file_id)
-        except AttachmentError as exc:
-            return f"файл не открыт: {exc}"
+    def _open(self, file_id: str) -> AttachmentText:
+        att = self.ctx.attachments(self.deal, file_id)
+        self.opened.add(file_id)
         self.result.files_read.append(att.name)
         self.corpus.append(att.text)
+        return att
+
+    @staticmethod
+    def _wrap(att: AttachmentText) -> str:
         tail = "\n[…дальше обрезано]" if att.truncated else ""
         return f'<файл name="{att.name}">\n{att.text}{tail}\n</файл>'
+
+    def _preload(self) -> str:
+        """Все файлы закупки в первом сообщении, пока помещаются в PRELOAD_CHARS."""
+        files = [f for f in self.deal.raw_masked.get("details", {}).get("files") or [] if isinstance(f, dict)]
+        parts: list[str] = []
+        left: list[str] = []
+        budget = PRELOAD_CHARS
+        for f in files[:MAX_FILES]:
+            file_id, name = str(f.get("id", "")), str(f.get("name", ""))
+            if budget <= 0:
+                left.append(f"id {file_id} — {name}")
+                continue
+            try:
+                att = self._open(file_id)
+            except AttachmentError as exc:
+                parts.append(f'<файл name="{name}">не открыт: {exc}</файл>')
+                continue
+            budget -= len(att.text)
+            parts.append(self._wrap(att))
+        left += [f"id {f.get('id')} — {f.get('name')}" for f in files[MAX_FILES:]]
+        if left:
+            parts.append("Не загружены (открой через get_attachment_text, если нужны): " + "; ".join(left))
+        return "\n".join(parts)
+
+    def _attachment(self, args: dict[str, Any]) -> str:
+        file_id = str(args.get("file_id", ""))
+        if file_id in self.opened:
+            return "этот файл уже приложен к закупке выше — читай его там"
+        if len(self.result.files_read) >= MAX_FILES:
+            return f"лимит: открыто уже {MAX_FILES} файлов. Работай с тем, что есть."
+        try:
+            return self._wrap(self._open(file_id))
+        except AttachmentError as exc:
+            return f"файл не открыт: {exc}"
 
     def _search(self, args: dict[str, Any]) -> str:
         if self.result.searches >= MAX_SEARCHES:
@@ -371,6 +436,9 @@ class _Run:
             {"role": "system", "content": prompt.text},
             {"role": "user", "content": f"<закупка>\n{self.card}\n</закупка>"},
         ]
+        files = self._preload()
+        if files:
+            messages[1]["content"] += f"\n<файлы_закупки>\n{files}\n</файлы_закупки>"
         while self.result.turns < MAX_TURNS:
             if self.result.cost_rub > MAX_COST_RUB:
                 self.result.needs_human = f"бюджет разбора {MAX_COST_RUB} ₽ исчерпан"
