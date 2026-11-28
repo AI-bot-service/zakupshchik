@@ -62,7 +62,10 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
   const deal = inbox?.deals.find((d) => d.id === id);
   await chrome.storage.local.set({ focus: id });
   if (!deal) return;
-  const tab = await chrome.tabs.create({ url: deal.url });
+  const tab = await chrome.tabs.create({ url: deal.url, active: true });
+  // tabs.create не выводит окно вперёд: свёрнутое разворачиваем, затем фокус
+  const win = await chrome.windows.get(tab.windowId);
+  await chrome.windows.update(tab.windowId, win.state === "minimized" ? { state: "normal", focused: true } : { focused: true });
   try {
     await chrome.sidePanel.open({ windowId: tab.windowId });
   } catch {
