@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Сделки · Закупщик{% endblock %}
-{% block head %}<script src="/static/filter.js" defer></script>{% endblock %}
+{% block head %}<script src="/static/filter.js" defer></script>{% if view.value != 'excluded' %}<script src="/static/fresh.js" defer></script>{% endif %}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -24,6 +24,11 @@
   <a href="/deals?view={{ key.value }}{% if first %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}" {% if key == view %}aria-current="page"{% endif %}>{{ title }} <span>{{ counts[key] }}</span></a>
   {% endfor %}
 </nav>
+
+<div class="fresh" id="fresh" data-since="{{ shown_at }}" role="status" aria-live="polite" hidden>
+  <span class="fresh-text"></span>
+  <button class="btn btn-primary btn-small" type="button" data-fresh-show>Показать</button>
+</div>
 
 {% if stamps %}
 <fieldset class="stamp-filter">

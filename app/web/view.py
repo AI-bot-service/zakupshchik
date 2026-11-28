@@ -233,6 +233,17 @@ def view_counts(session: Session, now: datetime, period: Period | None = None) -
     }
 
 
+def fresh_count(session: Session, since: datetime) -> int:
+    """Сколько сделок стали разобранными после since: столько новых строк появится в списке."""
+    became = select(DealStatusLog.deal_id).where(
+        DealStatusLog.at > since,
+        DealStatusLog.to_status.in_((DealStatus.HOT, DealStatus.ANALYZED)),
+        or_(DealStatusLog.from_status.is_(None), DealStatusLog.from_status.not_in(WORKED)),
+    )
+    q = select(func.count()).where(Deal.id.in_(became), Deal.status.in_(WORKED))
+    return session.scalar(q) or 0
+
+
 @dataclass(frozen=True)
 class PositionView:
     name: str

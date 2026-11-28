@@ -10,7 +10,7 @@ from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,7 @@ from app.web.view import (
     deal_card,
     deal_rows,
     file_path,
+    fresh_count,
     only_stamps,
     stamp_counts,
     view_counts,
@@ -191,8 +192,17 @@ def deals_page(
             "first": span[0].isoformat() if span else "",
             "last": span[1].isoformat() if span else "",
             "period_dates": period.title.removeprefix("размещены ") if period else None,
+            "shown_at": now.isoformat(),
         },
     )
+
+
+@router.get("/deals/fresh")
+def deals_fresh(user: User, session: Db, since: Annotated[datetime, Query()]) -> JSONResponse:
+    """Опрос со страницы «Сделки» (static/fresh.js): сколько новых разобранных сделок с момента её показа."""
+    if since.tzinfo is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Время с часовым поясом")
+    return JSONResponse({"n": fresh_count(session, since)}, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/deals/{deal_id}", response_class=HTMLResponse)

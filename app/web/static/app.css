@@ -96,6 +96,18 @@ main { flex: 1; width: 100%; max-width: 1200px; padding: var(--sp-5) var(--sp-5)
 .saved { margin-bottom: var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--c-stamp-soft); color: var(--c-ink); font-weight: 600; max-width: none; }
 .alert { padding: var(--sp-3); border-radius: var(--radius); background: var(--c-down-soft); color: var(--c-down); font-weight: 600; }
 
+/* Плашка «пришли новые заявки» над списком сделок (static/fresh.js) */
+.fresh {
+  display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; justify-content: space-between;
+  margin: 0 0 var(--sp-4); padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
+  border-radius: var(--radius); background: var(--c-stamp-soft); box-shadow: inset 3px 0 0 var(--c-stamp);
+  font-weight: 600;
+  animation: fresh-in var(--t-base) var(--ease);
+}
+.fresh[hidden] { display: none; }
+.fresh-text b { color: var(--c-stamp); font-weight: 800; }
+@keyframes fresh-in { from { opacity: 0; transform: translateY(calc(-1 * var(--sp-2))); } }
+
 /* ── Кнопки и поля ──────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);

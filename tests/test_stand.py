@@ -51,7 +51,13 @@ def test_login_ok_then_home() -> None:
 
 def test_deals_and_files_require_login() -> None:
     client = make_client()
-    for url in ("/deals", "/deals/1", "/deals/1/files/kp0", "/deals.xlsx"):
+    for url in (
+        "/deals",
+        "/deals/1",
+        "/deals/1/files/kp0",
+        "/deals.xlsx",
+        "/deals/fresh?since=2026-11-28T06:00:00Z",
+    ):
         r = client.get(url, follow_redirects=False)
         assert r.status_code == 303, url
         assert r.headers["location"] == "/login"
