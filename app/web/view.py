@@ -75,6 +75,39 @@ VIEW_RU = {
 }
 
 
+class Sort(StrEnum):
+    CONDITIONS = "conditions"
+    NEW = "new"
+    OLD = "old"
+    PRICE_DESC = "price_desc"
+    PRICE_ASC = "price_asc"
+
+
+SORT_RU = {
+    Sort.CONDITIONS: "По условиям",
+    Sort.NEW: "Сначала новые",
+    Sort.OLD: "Сначала старые",
+    Sort.PRICE_DESC: "Дороже",
+    Sort.PRICE_ASC: "Дешевле",
+}
+
+
+def default_sort(view: View) -> Sort:
+    return Sort.NEW if view is View.ARCHIVE else Sort.CONDITIONS
+
+
+def sort_deals(deals: list[Deal], order: Sort, now: datetime) -> None:
+    """Сортировка списка на месте. Без НМЦ — в конце при любом направлении цены."""
+    far = datetime.max.replace(tzinfo=now.tzinfo)
+    if order is Sort.CONDITIONS:
+        deals.sort(key=lambda d: (-(d.conditions_met or 0), d.end_at or far, -float(d.score or 0)))
+    elif order in (Sort.NEW, Sort.OLD):
+        deals.sort(key=lambda d: (d.start_at or d.created_at, d.id), reverse=order is Sort.NEW)
+    else:
+        sign = -1 if order is Sort.PRICE_DESC else 1
+        deals.sort(key=lambda d: (d.nmck is None, sign * float(d.nmck or 0), d.end_at or far))
+
+
 def time_left(end_at: datetime | None, now: datetime) -> str:
     if end_at is None:
         return "срок не указан"
@@ -149,18 +182,11 @@ def _subject(deal: Deal) -> str:
     return subject if isinstance(subject, str) and subject else deal.title
 
 
-def deal_rows(session: Session, view: View, now: datetime, period: Period | None = None) -> list[DealRow]:
+def deal_rows(
+    session: Session, view: View, now: datetime, period: Period | None = None, order: Sort | None = None
+) -> list[DealRow]:
     deals = list(session.scalars(view_query(view, now, period)))
-    if view is View.ARCHIVE:
-        deals.sort(key=lambda d: (d.start_at or d.created_at, d.id), reverse=True)
-    else:
-        deals.sort(
-            key=lambda d: (
-                -(d.conditions_met or 0),
-                d.end_at or datetime.max.replace(tzinfo=now.tzinfo),
-                -float(d.score or 0),
-            )
-        )
+    sort_deals(deals, order or default_sort(view), now)
     platforms = dict(session.execute(select(Platform.id, Platform.name)).tuples().all())
     ids = [d.id for d in deals]
     with_kp = set(session.scalars(select(Proposal.deal_id).where(Proposal.deal_id.in_(ids))))

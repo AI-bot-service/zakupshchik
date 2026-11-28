@@ -14,14 +14,14 @@
     <label for="to">по</label>
     <input id="to" name="to" type="date" value="{{ last }}" max="{{ today }}">
     <button class="btn btn-quiet" type="submit">Показать</button>
-    {% if first and view.value != 'archive' %}<a class="btn btn-quiet" href="/deals?view={{ view.value }}">Сбросить даты</a>{% endif %}
+    {% if first and view.value != 'archive' %}<a class="btn btn-quiet" href="/deals?view={{ view.value }}{{ sort_q }}">Сбросить даты</a>{% endif %}
     <button class="btn btn-primary btn-small" type="submit" formaction="/deals.xlsx">Скачать Excel</button>
   </form>
 </div>
 
 <nav class="tabs" aria-label="Какие сделки показать">
   {% for key, title in views.items() %}
-  <a href="/deals?view={{ key.value }}{% if first %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}" {% if key == view %}aria-current="page"{% endif %}>{{ title }} <span>{{ counts[key] }}</span></a>
+  <a href="/deals?view={{ key.value }}{% if first %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}{{ sort_q }}" {% if key == view %}aria-current="page"{% endif %}>{{ title }} <span>{{ counts[key] }}</span></a>
   {% endfor %}
 </nav>
 
@@ -29,6 +29,16 @@
   <span class="fresh-text"></span>
   <button class="btn btn-primary btn-small" type="button" data-fresh-show>Показать</button>
 </div>
+
+<fieldset class="sort-filter">
+  <legend>Порядок</legend>
+  {% for key, title in sorts.items() %}
+  <label class="sort-opt">
+    <input type="radio" name="sort" value="{{ key.value }}" form="deals-filter" {% if key == sort %}checked{% endif %} data-autosubmit>
+    {{ title }}
+  </label>
+  {% endfor %}
+</fieldset>
 
 {% if stamps %}
 <fieldset class="stamp-filter">
@@ -39,7 +49,7 @@
     {{ stamp_ru[s] }} <span>{{ n }}</span>
   </label>
   {% endfor %}
-  {% if chosen %}<a href="/deals?view={{ view.value }}{% if first %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}">Все штампы</a>{% endif %}
+  {% if chosen %}<a href="/deals?view={{ view.value }}{% if first %}&amp;from={{ first }}&amp;to={{ last }}{% endif %}{{ sort_q }}">Все штампы</a>{% endif %}
 </fieldset>
 {% endif %}
 

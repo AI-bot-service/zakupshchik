@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -8,7 +9,7 @@ from app.api.deals import apply_status
 from app.db.models import Actor, Channel, Deal, DealStatus, DealStatusLog, Proposal, ProposalStatus
 from app.pipeline.status_log import Who
 from app.report.stamps import Stamp, Verdict, log_line, stamp, verdict
-from app.web.view import can_skip, next_actions, time_left, track, urgent
+from app.web.view import Sort, can_skip, next_actions, sort_deals, time_left, track, urgent
 
 NOW = datetime(2026, 11, 27, 9, 0, tzinfo=UTC)
 
@@ -181,3 +182,22 @@ def test_take_needs_analysis() -> None:
     with pytest.raises(HTTPException) as exc:
         apply_status(FakeSession(None), deal, DealStatus.TAKEN, "", WHO)  # type: ignore[arg-type]
     assert exc.value.status_code == 422
+
+
+def test_sort_by_date_and_price() -> None:
+    def deal(i: int, days: int, nmck: str | None, n: int) -> Deal:
+        start = NOW - timedelta(days=days)
+        price = Decimal(nmck) if nmck else None
+        return Deal(id=i, start_at=start, created_at=start, nmck=price, conditions_met=n)
+
+    deals = [deal(1, 3, "500", 4), deal(2, 1, None, 6), deal(3, 2, "90000", 5)]
+
+    def ids(order: Sort) -> list[int]:
+        sort_deals(deals, order, NOW)
+        return [d.id for d in deals]
+
+    assert ids(Sort.NEW) == [2, 3, 1]
+    assert ids(Sort.OLD) == [1, 3, 2]
+    assert ids(Sort.PRICE_DESC) == [3, 1, 2]
+    assert ids(Sort.PRICE_ASC) == [1, 3, 2]
+    assert ids(Sort.CONDITIONS) == [2, 3, 1]

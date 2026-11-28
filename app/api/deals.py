@@ -26,10 +26,13 @@ from app.scoring.store import active_rules
 from app.web.view import (
     ACTION_RU,
     MANAGER_ACTIONS,
+    SORT_RU,
     VIEW_RU,
+    Sort,
     View,
     deal_card,
     deal_rows,
+    default_sort,
     file_path,
     fresh_count,
     only_stamps,
@@ -166,12 +169,13 @@ def deals_page(
     first: Annotated[str | None, Query(alias="from", max_length=10)] = None,
     last: Annotated[str | None, Query(alias="to", max_length=10)] = None,
     stamp: Annotated[list[Stamp] | None, Query(max_length=len(Stamp))] = None,
+    sort: Sort | None = None,
 ) -> HTMLResponse:
     now = datetime.now(UTC)
     today = now.astimezone(MSK).date()
     span = _period(view, first, last, today)
     period = day_period(*span) if span else None
-    rows = deal_rows(session, view, now, period)
+    rows = deal_rows(session, view, now, period, sort)
     chosen = frozenset(stamp or ())
     shown = only_stamps(rows, chosen)
     counts = view_counts(session, now, period)
@@ -188,6 +192,9 @@ def deals_page(
             "stamps": stamp_counts(rows),
             "stamp_ru": STAMP_RU,
             "chosen": chosen,
+            "sorts": SORT_RU,
+            "sort": sort or default_sort(view),
+            "sort_q": f"&sort={sort.value}" if sort else "",
             "today": today.isoformat(),
             "first": span[0].isoformat() if span else "",
             "last": span[1].isoformat() if span else "",

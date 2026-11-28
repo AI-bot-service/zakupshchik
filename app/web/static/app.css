@@ -196,6 +196,17 @@ blockquote { margin: var(--sp-2) 0 0; padding-left: var(--sp-3); border-left: 2p
 .stamp-filter .stamp:has(input:not(:checked)) { opacity: 0.45; }
 .stamp-filter input { margin: 0; accent-color: var(--c-stamp); }
 
+.sort-filter { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; margin: 0 0 var(--sp-3); padding: 0; border: 0; font-size: var(--fs-sm); }
+.sort-filter legend { float: left; margin-right: var(--sp-2); font-weight: 600; color: var(--c-ink-muted); }
+.sort-opt {
+  position: relative; padding: var(--sp-1) var(--sp-3); border: 1px solid var(--c-rule); border-radius: var(--radius);
+  color: var(--c-ink-muted); font-weight: 600; cursor: pointer; transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.sort-opt:hover { color: var(--c-ink); }
+.sort-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.sort-opt:has(input:checked) { color: var(--c-sheet); background: var(--c-stamp); border-color: var(--c-stamp); }
+.sort-opt:has(input:focus-visible) { outline: 2px solid var(--c-stamp); outline-offset: 2px; }
+
 .deals { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
 .deal {
   display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: var(--sp-4); align-items: center;
