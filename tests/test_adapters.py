@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from socksio import SOCKSError
 
 from app.adapters import collect, parse
 from app.adapters.config import PlatformConfig, load_platforms
@@ -153,6 +154,20 @@ def test_flaky_status_is_retried_only_where_configured(monkeypatch: pytest.Monke
     with pytest.raises(httpx.HTTPStatusError):
         f.get_url(CONFIGS["tektorg_market"], CONFIGS["tektorg_market"].url)
     assert seen == [400]
+
+
+def test_malformed_socks_reply_is_transport_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Прокси не достучался до площадки и ответил битым SOCKS: это сеть, а не падение цикла."""
+
+    def reply(_: httpx.Request) -> httpx.Response:
+        raise SOCKSError("Malformed reply")
+
+    monkeypatch.setattr(Fetcher._get.retry, "sleep", lambda _: None)
+    f = Fetcher(None, sleep=lambda _: None)
+    f._client = httpx.Client(transport=httpx.MockTransport(reply))
+    result = collect(CONFIGS["mos_portal"], f, list(DEFAULT_SEARCH_QUERIES))
+    assert len(result.errors) == 1
+    assert "ProxyError" in result.errors[0]
 
 
 def test_unreachable_platform_stops_after_first_query() -> None:

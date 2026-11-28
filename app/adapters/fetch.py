@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import httpx
+from socksio import SOCKSError
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from app.adapters.config import PlatformConfig
@@ -45,6 +47,16 @@ def _retryable(exc: BaseException) -> bool:
     if isinstance(exc, httpx.TransportError | FlakyStatusError):
         return True
     return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (429, 500, 502, 503, 504)
+
+
+@contextmanager
+def _socks_as_transport() -> Iterator[None]:
+    """Битый ответ SOCKS-прокси (площадка недоступна с выхода) httpx пропускает как socksio-ошибку.
+    Делаем её сетевой, иначе одна площадка роняет весь цикл сбора."""
+    try:
+        yield
+    except SOCKSError as exc:
+        raise httpx.ProxyError(f"SOCKS: {exc}") from exc
 
 
 class Fetcher:
@@ -99,7 +111,7 @@ class Fetcher:
         if not url.startswith("https://"):
             raise ValueError("площадки опрашиваем только по https")
         self._wait_turn(cfg)
-        with self._client.stream("GET", url) as resp:
+        with _socks_as_transport(), self._client.stream("GET", url) as resp:
             resp.raise_for_status()
             chunks: list[bytes] = []
             size = 0
@@ -122,7 +134,8 @@ class Fetcher:
         if not url.startswith("https://"):
             raise ValueError("площадки опрашиваем только по https")
         self._wait_turn(cfg)
-        resp = self._client.get(url, params=params)
+        with _socks_as_transport():
+            resp = self._client.get(url, params=params)
         if resp.status_code in cfg.retry_status:
             raise FlakyStatusError(f"HTTP {resp.status_code}", request=resp.request, response=resp)
         resp.raise_for_status()
