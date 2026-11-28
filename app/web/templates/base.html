@@ -18,7 +18,6 @@
     <nav class="spine-nav" aria-label="Разделы">
       {% if user %}{{ nav('/deals', 'Сделки') }}{{ nav('/journal', 'Журнал') }}{{ nav('/platforms', 'Площадки') }}{{ nav('/admin/rules', 'Админка') }}{{ nav('/extension', 'Плагин') }}{% endif %}
       {{ nav('/status', 'Состояние стенда') }}
-      {{ nav('/design', 'Дизайн-схема') }}
     </nav>
     {% if user %}
     <form class="spine-out" method="post" action="/logout"><button type="submit">Выйти <span>{{ user }}</span></button></form>
