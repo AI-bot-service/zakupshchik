@@ -64,7 +64,7 @@ def run_cycle(
         if (only and cfg.code not in only) or (not only and cfg.code not in enabled):
             continue
         started = time.monotonic()
-        result = collect(cfg, fetcher)
+        result = collect(cfg, fetcher, rules.profile.filters.search_queries)
         with session_factory.begin() as session:
             saved = save_deals(session, ids[cfg.code], result.deals)
             error = "; ".join(result.errors) if result.errors else None

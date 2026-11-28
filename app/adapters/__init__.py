@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -37,12 +38,14 @@ def parse(text: str, cfg: PlatformConfig) -> CollectResult:
     return result
 
 
-def collect(cfg: PlatformConfig, fetcher: Fetcher, now: datetime | None = None) -> CollectResult:
-    """Все запросы площадки; сделки уникальны по external_id внутри прогона, закрытые отброшены."""
+def collect(
+    cfg: PlatformConfig, fetcher: Fetcher, queries: Sequence[str], now: datetime | None = None
+) -> CollectResult:
+    """Слова поиска из правил на одной площадке; сделки уникальны по external_id, закрытые отброшены."""
     now = now or datetime.now(UTC)
     total = CollectResult()
     seen: set[str] = set()
-    for i, query in enumerate(cfg.queries):
+    for i, query in enumerate(queries):
         try:
             part = parse(fetcher.get(cfg, query), cfg)
         except httpx.HTTPStatusError as exc:
@@ -50,7 +53,7 @@ def collect(cfg: PlatformConfig, fetcher: Fetcher, now: datetime | None = None) 
             continue
         except httpx.TransportError as exc:
             # Площадка недоступна (сеть, блок по IP): после повторов не ждём таймаутов на остальных словах
-            rest = len(cfg.queries) - i - 1
+            rest = len(queries) - i - 1
             note = f", ещё {rest} запр. отложено до следующего цикла" if rest else ""
             total.errors.append(f"«{query}»: нет соединения ({type(exc).__name__}){note}")
             break

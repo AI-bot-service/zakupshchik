@@ -14,6 +14,7 @@ from app.adapters.extract import ExtractError
 from app.adapters.fetch import Fetcher, build_params
 from app.adapters.normalize import MSK, parse_dt, parse_money, resolve
 from app.db.models import Law, Procedure, TriState
+from app.scoring.rules import DEFAULT_SEARCH_QUERIES
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -163,10 +164,11 @@ def test_unreachable_platform_stops_after_first_query() -> None:
             calls.append(query)
             raise httpx.ConnectTimeout("timeout")
 
-    result = collect(cfg, Down())  # type: ignore[arg-type]
-    assert calls == cfg.queries[:1]
+    queries = list(DEFAULT_SEARCH_QUERIES)
+    result = collect(cfg, Down(), queries)  # type: ignore[arg-type]
+    assert calls == queries[:1]
     assert len(result.errors) == 1
-    assert f"ещё {len(cfg.queries) - 1} запр." in result.errors[0]
+    assert f"ещё {len(queries) - 1} запр." in result.errors[0]
 
 
 def test_platform_codes_unique_and_https() -> None:

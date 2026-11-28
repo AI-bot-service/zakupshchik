@@ -36,7 +36,7 @@ from app.pipeline.prefilter import run_prefilter
 from app.pipeline.proposals import adopt_manager_kp, make_proposals
 from app.pipeline.runs import finish, take_pending
 from app.scoring.rules import Rules, RulesError
-from app.scoring.store import active_rules
+from app.scoring.store import active_rules, recipients_since
 
 log = structlog.get_logger("worker")
 # Сделок на разбор за запуск: ~1 мин на сделку, запуск раз в интервал сбора
@@ -96,27 +96,32 @@ def notify(
     platforms: list[PlatformConfig],
     now: datetime,
 ) -> NotifyRun:
-    """Письма по горячим сделкам и ежедневный Excel. Нет Postbox или адресатов — пропускаем."""
-    if not settings.recipients:
+    """Письма по горячим сделкам и ежедневный Excel. Адреса — из «Админки», пусто — NOTIFY_TO.
+    Нет Postbox или адресатов — пропускаем."""
+    recipients = rules.profile.notify.recipients or settings.recipients
+    if not recipients:
         return NotifyRun()
     mailer = make_mailer(settings)
     if mailer is None:
         return NotifyRun()
     by_code = {c.code: c for c in platforms}
     with Fetcher(settings.proxy_url) as fetcher, factory.begin() as session:
+        # Адрес из «Админки» получает только сделки, найденные после его добавления; NOTIFY_TO — все
+        since = recipients_since(session) if rules.profile.notify.recipients else {}
         run = notify_deals(
             session,
             mailer,
-            settings.recipients,
+            recipients,
             rules,
             now,
             settings.public_url,
             fetcher,
             by_code,
             settings.app_secret_key.get_secret_value(),
+            since,
         )
     with factory.begin() as session:
-        daily = daily_report(session, mailer, settings.recipients, rules, now, settings.public_url)
+        daily = daily_report(session, mailer, recipients, rules, now, settings.public_url)
     run.daily, run.failed = daily.daily, run.failed + daily.failed
     for err in run.errors + daily.errors:
         log.warning("notify_failed", error=err)

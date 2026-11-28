@@ -81,8 +81,7 @@ class PlatformConfig(BaseModel):
     min_interval_s: float = Field(default=4, ge=1)
     # Коды ответа, которые площадка отдаёт эпизодически на исправный запрос: повторить, а не считать ошибкой
     retry_status: list[int] = Field(default_factory=list)
-    queries: list[str] = Field(min_length=1)
-    # {query} в строках заменяется словом запроса
+    # {query} в строках заменяется словом поиска из правил (вкладка «Админка»)
     params: dict[str, str | list[str]] = Field(default_factory=dict)
     json_params: dict[str, Any] = Field(default_factory=dict)
     items_path: str = ""

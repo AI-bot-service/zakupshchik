@@ -4,7 +4,8 @@
 #   next_rsc  — страница Next.js App Router, карточки в потоке RSC (вид B)
 # Поля сделки (fields): путь в записи ("a.b.0.c"), шаблон ("https://…/{id}") или список вариантов — берётся первый непустой.
 # Словари procedure_map / law_map переводят слова площадки в единые значения (app/db/models.py: Procedure, Law).
-# Запросы — по словам из queries, не чаще 1 запроса в min_interval_s секунд на площадку.
+# Слова поиска — в правилах (вкладка «Админка», config/rules.yaml), одни на все площадки.
+# Не чаще 1 запроса в min_interval_s секунд на площадку.
 
 platforms:
   - code: mos_portal
@@ -15,7 +16,6 @@ platforms:
     min_interval_s: 3
     # 27.11: на исправный запрос изредка 400 (5–6 раз за 150 циклов), следующий цикл тот же запрос проходит
     retry_status: [400]
-    queries: ["программного обеспечения", "лицензи", "неисключительных прав", "антивирус"]
     json_params:
       queryDto:
         filter:
@@ -79,7 +79,6 @@ platforms:
     kind: next_data
     url: https://www.tektorg.ru/market/procedures
     min_interval_s: 4
-    queries: ["программного обеспечения", "лицензи", "неисключительн", "антивирус"]
     params: { name: "{query}" }
     items_path: props.pageProps.initialReduxState.listingProcedures.data
     fields:
@@ -110,7 +109,6 @@ platforms:
     kind: next_rsc
     url: https://www.fabrikant.ru/procedure/search/purchases
     min_interval_s: 4
-    queries: ["программного обеспечения", "лицензи", "неисключительн", "антивирус"]
     params:
       query: "{query}"
       "section_ids[]": ["2", "16"]   # коммерческие закупки, Маркет

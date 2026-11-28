@@ -152,8 +152,10 @@ def notify_deals(
     fetcher: Fetcher | None = None,
     configs: dict[str, PlatformConfig] | None = None,
     link_secret: str = "",
+    since: dict[str, datetime] | None = None,
 ) -> NotifyRun:
-    """link_secret — APP_SECRET_KEY: подпись кнопки «Подготовить КП» (если КП к письму не приложено)."""
+    """link_secret — APP_SECRET_KEY: подпись кнопки «Подготовить КП» (если КП к письму не приложено).
+    since — адрес → момент добавления: сделки, найденные раньше, этому адресу не шлём."""
     run = NotifyRun()
     min_n = rules.profile.notify.min_conditions
     platforms = {p.id: p for p in session.scalars(select(Platform))}
@@ -167,6 +169,9 @@ def notify_deals(
     for deal in deals:
         todo = []
         for to in recipients:
+            added = (since or {}).get(to)
+            if added is not None and deal.created_at < added:
+                continue
             row = _record(session, NotifyChannel.EMAIL_DEAL, to, deal.id, None)
             if row.status is NotifyStatus.PENDING:
                 todo.append(row)

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from app.db.models import Procedure
 
@@ -25,7 +25,16 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+# Для версий правил, сохранённых до поля «Слова для поиска»
+DEFAULT_SEARCH_QUERIES = ("программного обеспечения", "лицензи", "неисключительн", "антивирус")
+MAX_SEARCH_QUERIES = 20
+
+
 class Filters(_Strict):
+    # Запросы к открытым площадкам: каждое слово — отдельный поиск на каждой площадке за цикл
+    search_queries: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_SEARCH_QUERIES), min_length=1, max_length=MAX_SEARCH_QUERIES
+    )
     max_nmck_rub: Decimal = Field(gt=0)
     procedures_take: list[Procedure]
     procedures_cut: list[Procedure]
@@ -34,6 +43,17 @@ class Filters(_Strict):
     software_words: list[str] = Field(min_length=1)
     stop_words: list[str]
     cut_quoted_foreign_product: bool
+
+    @field_validator("search_queries")
+    @classmethod
+    def _queries(cls, value: list[str]) -> list[str]:
+        out = list(dict.fromkeys(q.strip() for q in value if q.strip()))
+        if not out:
+            raise ValueError("нужно хотя бы одно слово")
+        for q in out:
+            if len(q) < 3 or len(q) > 100:
+                raise ValueError(f"«{q}» — от 3 до 100 символов")
+        return out
 
 
 class Conditions(_Strict):
@@ -56,10 +76,33 @@ class Weights(_Strict):
         return self
 
 
+EMAIL_RE = re.compile(r"[^@\s,;<>\"']+@[^@\s,;<>\"']+\.[^@\s,;<>\"'.]{2,}")
+MAX_RECIPIENTS = 20
+
+
 class Notify(_Strict):
     daily_report_at: time
     urgent_hours_left: float = Field(gt=0)
     min_conditions: int = Field(ge=1, le=6)
+    # Адреса писем о новых сделках и ежедневного Excel; пусто — NOTIFY_TO из окружения
+    recipients: list[str] = Field(default_factory=list, max_length=MAX_RECIPIENTS)
+
+    @field_validator("recipients", mode="before")
+    @classmethod
+    def _emails(cls, value: Any) -> Any:  # noqa: ANN401 — сырое значение формы или YAML
+        if not isinstance(value, list):
+            return value
+        out: list[str] = []
+        for chunk in value:
+            for raw in re.split(r"[\s,;]+", str(chunk)):
+                addr = raw.strip().lower()
+                if not addr:
+                    continue
+                if len(addr) > 254 or not EMAIL_RE.fullmatch(addr):
+                    raise ValueError(f"«{raw.strip()}» — не адрес почты")
+                if addr not in out:
+                    out.append(addr)
+        return out
 
 
 class Kp(_Strict):
@@ -113,6 +156,7 @@ _RU = {
     "string_too_short": "слишком коротко",
     "string_too_long": "слишком длинно",
     "too_short": "нужно хотя бы одно значение",
+    "too_long": "не больше {max_length} значений",
     "enum": "неизвестное значение",
     "missing": "не заполнено",
 }
@@ -150,7 +194,9 @@ def parse_profile(data: Any, source: str = "правила") -> RuleProfile:  # 
 
 
 def profile_version(profile: RuleProfile) -> str:
-    canonical = json.dumps(profile.model_dump(mode="json"), sort_keys=True, ensure_ascii=False).encode()
+    """Адресаты и слова поиска в версию не входят: их смена не меняет отбор и не пересчитывает сделки."""
+    data = profile.model_dump(mode="json", exclude={"notify": {"recipients"}, "filters": {"search_queries"}})
+    canonical = json.dumps(data, sort_keys=True, ensure_ascii=False).encode()
     return hashlib.sha256(LOGIC_VERSION + canonical).hexdigest()[:12]
 
 

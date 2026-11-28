@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -42,7 +43,12 @@ def save_rules(session: Session, data: Any, author: str, note: str | None) -> tu
     """Проверить и сохранить новой версией. Возвращает (правила, изменились ли). Ошибка — RulesError."""
     rules = make_rules(parse_profile(data))
     current = latest(session)
-    if current is not None and current.version == rules.version:
+    # Версия без адресатов: сравниваем ещё и профиль, иначе смена адресов не сохранится
+    if (
+        current is not None
+        and current.version == rules.version
+        and parse_profile(current.profile) == rules.profile
+    ):
         return rules, False
     session.add(
         RulesVersion(
@@ -59,3 +65,15 @@ def save_rules(session: Session, data: Any, author: str, note: str | None) -> tu
 
 def history(session: Session, limit: int = 20) -> list[RulesVersion]:
     return list(session.scalars(select(RulesVersion).order_by(RulesVersion.id.desc()).limit(limit)))
+
+
+def recipients_since(session: Session) -> dict[str, datetime]:
+    """Адрес → с какой версии правил он непрерывно в списке. Письма по сделкам — только о найденных позже."""
+    since: dict[str, datetime] = {}
+    gone: set[str] = set()
+    for row in session.scalars(select(RulesVersion).order_by(RulesVersion.id.desc())):
+        listed = set(parse_profile(row.profile).notify.recipients)
+        for addr in listed - gone:
+            since[addr] = row.created_at
+        gone |= set(since) - listed
+    return since
