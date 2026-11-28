@@ -197,9 +197,66 @@ function fileList(dealId, files) {
   );
 }
 
-function decision(card) {
+// Карточка в панели повторяет карточку стенда: досье → ход сделки → условия → почему так → позиции → риски → документы → КП → журналы.
+
+const QUIET_STEPS = new Set(["Отсеяна", "Приём закрыт"]);
+let kpWait = null; // таймер ожидания КП после «Беру в работу»
+
+function panel(title, ...body) {
+  return h("section", { class: "panel" }, title && h("h2", {}, title), ...body);
+}
+
+function fold(title, ...body) {
+  return h("details", { class: "panel fold" }, h("summary", {}, h("h2", {}, title)), ...body);
+}
+
+function dossier(card) {
   const r = card.row;
-  const note = h("p", { class: "muted", role: "status" }, "Робот заявку не подаёт и КП заказчику не отправляет.");
+  const catalog = card.catalog_total
+    ? card.catalog_total
+    : card.conditions.length
+      ? h("span", { class: "empty-price" }, "цены нет — ставит менеджер")
+      : "не сравнивали";
+  return h(
+    "header",
+    { class: "dossier" },
+    h("div", { class: `stamp stamp-${r.stamp}`, role: "status" }, h("span", { class: "stamp-main" }, r.stamp_ru), r.stamp_sub && h("span", { class: "stamp-date" }, r.stamp_sub)),
+    h("h1", {}, r.subject),
+    h("p", { class: "strong" }, r.customer),
+    h("p", { class: "muted small" }, `${r.platform}, ${r.procedure}, размещена ${r.published_msk}`),
+    h(
+      "dl",
+      { class: "facts" },
+      h("dt", {}, "Максимальная цена"),
+      h("dd", { class: "money" }, card.nmck),
+      h("dt", {}, "По каталогу"),
+      h("dd", {}, catalog),
+      h("dt", {}, "Приём КП до"),
+      h("dd", {}, `${r.end_msk} МСК `, h("span", { class: r.urgent ? "urgent" : "muted" }, r.left)),
+    ),
+  );
+}
+
+function track(card) {
+  return h(
+    "ol",
+    { class: "track" },
+    card.track.map((s) =>
+      h(
+        "li",
+        { class: `track-${s.state}${QUIET_STEPS.has(s.name) ? " is-quiet" : ""}`, "aria-current": s.state === "now" ? "step" : null },
+        h("span", { class: "track-dot", "aria-hidden": "true" }),
+        h("b", {}, s.name),
+        h("span", { class: "track-when" }, s.when || (s.state === "now" ? "сейчас" : "")),
+      ),
+    ),
+  );
+}
+
+function flow(card) {
+  const r = card.row;
+  const st = r.status;
+  const note = h("p", { class: "hint", role: "status" });
   const send = async (action, reason = "") => {
     note.textContent = "Сохраняем…";
     try {
@@ -207,54 +264,240 @@ function decision(card) {
       await chrome.runtime.sendMessage("poll");
       await openDeal(r.id, pinned);
     } catch (e) {
+      if (e instanceof ApiError && e.status === 409) return box.replaceChildren(needKp());
       note.textContent = e.message;
-      note.className = e instanceof ApiError && e.status === 409 ? "need-kp" : "muted";
     }
   };
-  const select = h("select", { id: "reason", required: true }, h("option", { value: "" }, "Выберите причину"), SKIP_REASONS.map((x) => h("option", { value: x }, x)));
-  const other = h("input", { id: "reason-other", maxlength: 450, placeholder: "Своими словами", hidden: true });
-  select.addEventListener("change", () => (other.hidden = select.value !== "Другое"));
+
+  const needKp = () =>
+    h(
+      "div",
+      { class: "need-kp", role: "alert" },
+      h("b", {}, "КП в карточке нет"),
+      h("p", {}, "«КП отправлено» ставится, когда КП лежит в карточке — так видно, что именно ушло заказчику."),
+      st === "taken"
+        ? h("p", {}, "Робот уже собирает КП — оно появится в блоке «Коммерческое предложение». Или приложите своё в карточке на стенде.")
+        : [h("button", { class: "btn btn-primary", type: "button", onclick: () => send("taken") }, "Сформировать КП"), h("p", {}, "Или приложите своё КП в карточке на стенде.")],
+      h("a", { href: cardUrl(r.id), target: "_blank", rel: "noopener noreferrer" }, "Карточка на стенде"),
+      h("button", { class: "link", type: "button", onclick: () => openDeal(r.id, pinned) }, "Отмена"),
+    );
+
+  let body;
+  if (card.actions.length || card.can_skip) {
+    const sent =
+      st === "submitted" &&
+      card.kp &&
+      h(
+        "div",
+        { class: "kp-sent" },
+        h("span", {}, `Заказчику ушло КП v${card.kp.version}`, card.kp_files.length ? ": " : ""),
+        card.kp_files.length > 0 && fileList(r.id, card.kp_files.slice(0, 1)),
+        h("span", { class: "muted small" }, `${card.kp.by_manager ? "своё КП менеджера" : "собрано роботом"}, отмечено ${r.stamp_sub}`),
+      );
+    const actions = card.actions.map((a) =>
+      h("div", { class: "flow-action" }, h("button", { class: `btn ${a.primary ? "btn-primary" : "btn-quiet"}`, type: "button", onclick: () => send(a.to) }, a.label), a.hint && h("p", { class: "hint" }, a.hint)),
+    );
+    let skip = null;
+    if (card.can_skip) {
+      const select = h("select", { id: "reason", required: true }, h("option", { value: "" }, "Выберите причину"), SKIP_REASONS.map((x) => h("option", { value: x, selected: x === card.skip_reason }, x)));
+      const custom = card.skip_reason && !SKIP_REASONS.includes(card.skip_reason);
+      if (custom) select.value = "Другое";
+      const other = h("input", { id: "reason-other", maxlength: 450, placeholder: "Например: нет партнёрства с вендором", hidden: !custom, value: custom ? card.skip_reason : null });
+      select.addEventListener("change", () => (other.hidden = select.value !== "Другое"));
+      skip = h(
+        "details",
+        { class: "skip-box" },
+        h("summary", { class: "btn btn-quiet" }, st === "skipped" ? "Изменить причину отказа" : "Не беру"),
+        h(
+          "form",
+          {
+            class: "skip",
+            onsubmit: (e) => {
+              e.preventDefault();
+              send("skipped", select.value === "Другое" ? other.value.trim() || "Другое" : select.value);
+            },
+          },
+          h("label", { for: "reason" }, "Причина отказа"),
+          select,
+          other,
+          h("button", { class: "btn btn-primary", type: "submit" }, "Сохранить"),
+          h("p", { class: "hint" }, "Причина попадёт в журнал сделки — по причинам уточняют правила отбора."),
+        ),
+      );
+    }
+    body = [sent, h("div", { class: "flow-actions" }, actions, skip), note];
+  } else {
+    body = h(
+      "p",
+      { class: "flow-note" },
+      st === "filtered_out"
+        ? "Робот отсеял сделку по правилам, решение не нужно. Не согласны — поправьте правила в «Админке» на стенде."
+        : st === "new"
+          ? "Робот ещё разбирает документы. Кнопки появятся после разбора."
+          : "Приём КП закрыт — менять статус больше не нужно.",
+    );
+  }
+  const box = h("div", { class: "flow-body" }, body);
   return h(
     "section",
-    { class: "sheet decide" },
-    h("h2", {}, "Ваше решение"),
-    note,
-    r.status === "submitted"
-      ? [
-          h("p", {}, `КП отправлено заказчику ${r.stamp_sub}.`),
-          card.kp && h("p", {}, `Ушло КП v${card.kp.version}${card.kp_files.length ? `: ${card.kp_files[0].name}` : ""} — ${card.kp.by_manager ? "своё КП менеджера" : "собрано роботом"}.`),
-          card.kp_files.length > 0 && fileList(r.id, card.kp_files.slice(0, 1)),
-          h("button", { class: "btn btn-quiet", type: "button", onclick: () => send("taken") }, "Вернуть в работу"),
-          h("p", { class: "hint" }, "Если отметили по ошибке. КП в карточке остаётся."),
-        ]
-      : [
-          r.status !== "taken" && h("button", { class: "btn btn-primary", type: "button", onclick: () => send("taken") }, "Беру в работу"),
-          r.status !== "taken" && h("p", { class: "hint" }, "Робот собирает КП по разбору — аналоги, позиции вне каталога и пустые цены тоже — и кладёт в блок «Коммерческое предложение». Напоминания о сделке прекращаются, на штампе «В работе»."),
-          h("button", { class: `btn ${r.status === "taken" ? "btn-primary" : "btn-quiet"}`, type: "button", onclick: () => send("submitted") }, "КП отправлено"),
-          h("p", { class: "hint" }, "Вы отправили КП заказчику на площадке. На штампе «Отправлено» и дата. Если КП в карточке нет — подскажем, как его собрать или приложить своё."),
-        ],
-    r.status !== "submitted" &&
+    { class: "panel flow" },
+    h("div", { class: "panel-head" }, h("h2", {}, "Ход сделки"), h("p", { class: "muted small" }, "Робот заявку не подаёт и КП заказчику не отправляет — это делаете вы.")),
+    track(card),
+    box,
+  );
+}
+
+function conditions(card) {
+  const met = card.conditions.filter((c) => c.met).length;
+  const terms = h(
+    "dl",
+    { class: "terms" },
+    h("div", {}, h("dt", {}, "Договор"), h("dd", {}, card.contract)),
+    card.min_kp_days && h("div", {}, h("dt", {}, "КП должно действовать"), h("dd", {}, `не меньше ${card.min_kp_days} дн.`)),
+    !card.conditions.length && h("div", {}, h("dt", {}, "Оплата"), h("dd", {}, card.payment)),
+  );
+  return h(
+    "section",
+    { class: "panel" },
+    h("div", { class: "panel-head" }, h("h2", {}, "Условия закупки"), card.conditions.length > 0 && h("p", { class: "muted small" }, `Выполнено ${met} из 6`)),
+    card.conditions.length
+      ? h(
+          "ol",
+          { class: "conds" },
+          card.conditions.map((c) =>
+            h(
+              "li",
+              { class: c.met ? "is-met" : "is-unmet" },
+              h("span", { class: "cond-mark", "aria-hidden": "true" }, c.met ? "✓" : "✗"),
+              h("b", {}, c.short, h("span", { class: "visually-hidden" }, `: ${c.met ? "выполнено" : "не выполнено"}`)),
+              h("span", { class: "cond-text" }, c.text),
+            ),
+          ),
+        )
+      : h("p", { class: "muted" }, "Условия посчитаются после разбора документов роботом."),
+    terms,
+  );
+}
+
+function why(card) {
+  const r = card.row;
+  const items = [];
+  if (r.reason && r.status === "filtered_out") items.push(r.reason);
+  if (card.not_license_reason) items.push(`Это не поставка лицензий: ${card.not_license_reason}`);
+  items.push(...card.why);
+  if (!items.length && !card.check) return null;
+  return panel(
+    "Почему так",
+    h("ul", { class: "why" }, items.map((w) => h("li", {}, w))),
+    card.check && h("p", { class: "check" }, h("b", {}, "Проверить: "), card.check),
+    card.why_stale && h("p", { class: "hint" }, "Правила изменились, итог пересчитан. Разбор моделью обновится в ближайшем цикле."),
+  );
+}
+
+function positions(card) {
+  if (!card.positions.length) return null;
+  return panel(
+    "Что покупают и что есть в каталоге",
     h(
-      "details",
-      {},
-      h("summary", {}, "Не беру"),
-      h("p", { class: "hint" }, "Сделка не подходит. Причина сохраняется в истории — по причинам уточняют правила отбора в «Админке»."),
-      h(
-        "form",
-        {
-          class: "skip",
-          onsubmit: (e) => {
-            e.preventDefault();
-            const reason = select.value === "Другое" ? other.value.trim() || "Другое" : select.value;
-            send("skipped", reason);
-          },
-        },
-        h("label", { for: "reason" }, "Почему"),
-        select,
-        other,
-        h("button", { class: "btn btn-quiet", type: "submit" }, "Отметить «не беру»"),
+      "ol",
+      { class: "positions" },
+      card.positions.map((p) =>
+        h(
+          "li",
+          {},
+          h("div", { class: "pos-head" }, h("b", {}, p.name), h("span", { class: "muted" }, p.qty)),
+          h(
+            "div",
+            { class: "pos" },
+            h("span", { class: `tag pos-${p.match_kind}` }, p.match),
+            p.sku && (p.catalog_url ? h("a", { href: p.catalog_url, target: "_blank", rel: "noopener noreferrer" }, p.catalog_name || p.sku) : h("span", {}, p.catalog_name || "")),
+            p.sku && h("span", { class: "muted" }, `артикул ${p.sku}`),
+            p.sku && (p.price ? h("b", { class: "price" }, p.price) : h("span", { class: "empty-price" }, "нет цены")),
+          ),
+          h("p", { class: "muted small" }, `${p.reason} Уверенность ${p.confidence}%.`),
+          p.quote && h("details", {}, h("summary", {}, "Как сказано в закупке"), h("blockquote", {}, p.quote)),
+        ),
       ),
     ),
+  );
+}
+
+function risks(card) {
+  const items = [...card.findings, ...card.missing];
+  return items.length ? panel("Риски и чего не хватает", h("ul", { class: "why" }, items.map((x) => h("li", {}, x)))) : null;
+}
+
+function docs(card) {
+  return panel(
+    "Документы закупки",
+    card.docs.length ? fileList(card.row.id, card.docs) : [h("p", { class: "empty-word" }, "Пусто"), h("p", { class: "hint" }, "Площадка не дала вложений без входа.")],
+    h("a", { class: "btn btn-quiet", href: card.url, target: "_blank", rel: "noopener noreferrer" }, "Открыть на площадке"),
+  );
+}
+
+function kp(card) {
+  const r = card.row;
+  let body;
+  if (card.kp_files.length) {
+    body = [
+      fileList(r.id, card.kp_files),
+      h(
+        "p",
+        { class: "hint" },
+        card.kp_by_manager
+          ? `Своё КП менеджера, приложено ${card.kp.made_msk}, версия v${card.kp.version}. Робот его не пересобирает. `
+          : `Собрано роботом ${card.kp.made_msk}, версия v${card.kp.version}. Цены по каталогу на этот день, подтверждает менеджер. Подпись и печать ставятся вручную. `,
+        card.kp.sent ? h("b", {}, "Отправлено заказчику.") : "Заказчику пока не отправлено.",
+      ),
+    ];
+  } else if (r.status === "taken") {
+    body = h(
+      "div",
+      { class: "forge", role: "status" },
+      h("span", { class: "forge-sheet", "aria-hidden": "true" }, h("i"), h("i"), h("i")),
+      h("p", {}, h("b", {}, "Робот собирает КП"), h("br"), h("span", { class: "muted small" }, "Позиции и цены каталога, DOCX и PDF. Блок обновится сам.")),
+    );
+  } else {
+    const takeFirst = card.actions[0]?.to === "taken";
+    body = [
+      h("p", { class: "empty-word" }, "Пусто"),
+      h("p", { class: "hint" }, takeFirst ? "КП появится здесь после «Беру в работу»." : "Робот собирает КП, когда сделку берут в работу."),
+      card.kp_blockers.length > 0 && h("ul", { class: "why" }, card.kp_blockers.map((b) => h("li", {}, b))),
+    ];
+  }
+  return panel("Коммерческое предложение", body);
+}
+
+function priority(card) {
+  if (!card.priority.length) return null;
+  return fold(
+    `Как посчитан приоритет${card.score !== null ? `: ${card.score.toFixed(2)}` : ""}`,
+    h(
+      "ul",
+      { class: "bars" },
+      card.priority.map(([name, value, weight]) =>
+        h("li", {}, h("span", {}, name, h("span", { class: "muted" }, ` вес ${weight}`)), h("progress", { class: "bar", max: 1, value }, `${Math.round(value * 100)}%`), h("span", {}, value.toFixed(2))),
+      ),
+    ),
+    card.rules_version && h("p", { class: "hint" }, `Версия правил ${card.rules_version}, правятся в «Админке» на стенде.`),
+  );
+}
+
+function history(card) {
+  return fold(
+    `Журнал сделки: ${card.history_ru || "пусто"}`,
+    card.history.length
+      ? [
+          h(
+            "ol",
+            { class: "status-log" },
+            card.history.slice(0, 8).map((e) =>
+              h("li", { class: e.manager ? "is-manager" : "" }, h("span", { class: "muted" }, `${e.at_msk} · ${e.who}`), h("span", {}, h("b", {}, e.move), e.reason ? `: ${e.reason}` : ""), e.facts && h("span", { class: "muted small" }, e.facts)),
+            ),
+          ),
+          card.history.length > 8 && h("p", { class: "muted small" }, "Весь журнал — в карточке на стенде."),
+        ]
+      : h("p", { class: "muted" }, "Статус ещё не менялся."),
   );
 }
 
@@ -262,102 +505,23 @@ function renderCard(card) {
   const r = card.row;
   current = r.id;
   checked.textContent = "";
-  const catalog = card.catalog_total
-    ? card.catalog_total
-    : card.conditions.length
-      ? h("span", { class: "empty-price" }, "цены нет — ставит менеджер")
-      : "не сравнивали";
+  clearTimeout(kpWait);
+  if (r.status === "taken" && !card.kp_files.length) {
+    kpWait = setTimeout(() => current === r.id && openDeal(r.id, pinned), 5000);
+  }
   show(
     h("button", { class: "link back", type: "button", onclick: renderList }, "Все сделки"),
-    h("div", { class: `stamp stamp-${r.stamp}` }, h("span", { class: "stamp-main" }, r.stamp_ru), r.stamp_sub && h("span", { class: "stamp-date" }, r.stamp_sub)),
-    h("h1", {}, r.subject),
-    h("p", { class: "muted" }, r.customer),
-    h(
-      "dl",
-      { class: "facts" },
-      h("dt", {}, "Цена закупки"),
-      h("dd", {}, card.nmck),
-      h("dt", {}, "По каталогу"),
-      h("dd", {}, catalog),
-      h("dt", {}, "Приём КП до"),
-      h("dd", {}, `${r.end_msk} МСК `, h("span", { class: r.urgent ? "urgent" : "muted" }, r.left)),
-    ),
-    (card.why.length || card.check) &&
-      h("section", {}, h("h2", {}, "Почему так"), h("ul", { class: "why" }, card.why.map((w) => h("li", {}, w))), card.check && h("p", { class: "check" }, h("b", {}, "Проверить: "), card.check)),
-    decision(card),
-    card.history.length &&
-      h(
-        "section",
-        {},
-        h("h2", {}, "Журнал сделки"),
-        h(
-          "ol",
-          { class: "status-log" },
-          card.history.slice(0, 6).map((e) =>
-            h(
-              "li",
-              { class: e.manager ? "is-manager" : "" },
-              h("span", { class: "muted" }, `${e.at_msk} · ${e.who}`),
-              h("span", {}, h("b", {}, e.move), e.reason ? `: ${e.reason}` : ""),
-            ),
-          ),
-        ),
-        card.history.length > 6 && h("p", { class: "muted small" }, "Весь журнал — в карточке на стенде."),
-      ),
-    h(
-      "section",
-      { class: "sheet" },
-      h("h2", {}, "Коммерческое предложение"),
-      card.kp_files.length
-        ? [
-            fileList(r.id, card.kp_files),
-            h(
-              "p",
-              { class: "muted small" },
-              card.kp.by_manager
-                ? `Своё КП менеджера, приложено ${card.kp.made_msk}, версия v${card.kp.version}. Робот его не пересобирает. `
-                : `Собрано роботом ${card.kp.made_msk}, версия v${card.kp.version}. Цены по каталогу на этот день, подтверждает менеджер. `,
-              card.kp.sent ? h("b", {}, "Отправлено заказчику.") : "Заказчику пока не отправлено.",
-            ),
-          ]
-        : r.status === "taken"
-          ? [h("p", {}, "Робот собирает КП — откройте сделку ещё раз через минуту.")]
-          : [h("p", {}, "КП не собрано автоматически: сделка подходит не на 100%. Нажмите «Беру в работу» — робот соберёт КП с аналогами и пустыми ценами."), card.kp_blockers.length && h("ul", { class: "why" }, card.kp_blockers.map((b) => h("li", {}, b)))],
-    ),
-    card.conditions.length &&
-      h(
-        "section",
-        {},
-        h("h2", {}, "Шесть условий"),
-        h("ul", { class: "conditions" }, card.conditions.map((c) => h("li", { class: c.met ? "met" : "unmet" }, h("span", { class: "cond" }, c.met ? "да" : "нет"), h("span", {}, h("b", {}, c.title), " ", h("span", { class: "muted" }, c.reason))))),
-      ),
-    card.positions.length &&
-      h(
-        "section",
-        {},
-        h("h2", {}, "Позиции и каталог"),
-        h(
-          "ul",
-          { class: "positions" },
-          card.positions.map((p) =>
-            h(
-              "li",
-              {},
-              h("b", {}, p.name),
-              h("span", { class: "muted" }, ` ${p.qty}`),
-              h("div", { class: "pos" }, h("span", { class: `tag pos-${p.match_kind}` }, p.match), p.sku && h("span", { class: "muted" }, p.sku), p.sku && (p.price ? h("b", {}, p.price) : h("span", { class: "empty-price" }, "нет цены"))),
-            ),
-          ),
-        ),
-      ),
-    (card.findings.length || card.missing.length) && h("details", {}, h("summary", {}, `Риски и чего не хватает: ${card.findings.length + card.missing.length}`), h("ul", { class: "why" }, [...card.findings, ...card.missing].map((x) => h("li", {}, x)))),
-    h("section", { class: "sheet" }, h("h2", {}, "Документы закупки"), card.docs.length ? fileList(r.id, card.docs) : h("p", { class: "muted" }, "Площадка не дала вложений без входа.")),
-    h(
-      "p",
-      { class: "links" },
-      h("a", { href: card.url, target: "_blank", rel: "noopener noreferrer" }, "Закупка на площадке"),
-      h("a", { href: cardUrl(r.id), target: "_blank", rel: "noopener noreferrer" }, "Карточка на стенде"),
-    ),
+    dossier(card),
+    flow(card),
+    conditions(card),
+    why(card),
+    positions(card),
+    risks(card),
+    docs(card),
+    kp(card),
+    priority(card),
+    history(card),
+    h("p", { class: "links" }, h("a", { href: cardUrl(r.id), target: "_blank", rel: "noopener noreferrer" }, "Карточка на стенде"), card.steps.length > 0 && h("span", { class: "muted small" }, `Журнал робота: ${card.steps_ru}, ${card.agent_cost}`)),
   );
 }
 

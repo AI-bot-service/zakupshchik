@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Закупщик — помощник менеджера",
   "short_name": "Закупщик",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Уведомляет о выгодных закупках ПО и показывает разбор робота рядом со страницей закупки.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "alarms", "notifications", "sidePanel", "tabs"],
